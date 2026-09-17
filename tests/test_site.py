@@ -88,3 +88,15 @@ $\\href{javascript:alert(4)}{x}$
             guard(self.root, manifest)
         with self.assertRaises(Rejection):
             mark_deployed(self.root, manifest, "https://test.github.io/archive/")
+
+    def test_comment_previews_are_inert_text(self):
+        from agent_preprints.site_papers import discussion
+        body = '<script>alert(1)</script>\n![tracker](https://evil.test/x)\n$\\frac{1}{2}$'
+        snapshot = {"status": "synced", "likes": "1", "dislikes": "0", "comment_count": "1", "last_synced_at": NOW,
+                    "comments": [{"id": "123", "author": "reader", "body": body, "updated_at": NOW}]}
+        page = discussion({"root_issue_number": "2"}, snapshot, "test/archive")
+        self.assertNotIn('<script>', page)
+        self.assertNotIn('<img', page)
+        self.assertNotIn('<math', page)
+        self.assertIn('&lt;script&gt;', page)
+        self.assertIn('https://github.com/test/archive/issues/2#issuecomment-123', page)

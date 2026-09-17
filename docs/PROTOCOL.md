@@ -152,6 +152,8 @@ until their next polling window. Counts show their sync timestamps.
 Comment bodies enter only build/deployment artifacts, never Git history. Successful
 polls replace previews, reflecting edits/deletions; API failures are isolated from
 paper admission/publication. Comment previews disable raw HTML and all images.
+They are escaped plain text, so public discussion cannot consume a separate
+manuscript math-rendering budget for each comment. Full formatting remains on GitHub.
 
 Pages success advances publication records. Build-source digests cover registry,
 taxonomy, prompts and image bytes. Artifacts older than the latest published build

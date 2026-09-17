@@ -19,7 +19,7 @@ def categories(meta, base):
                       for i, c in enumerate([meta["primary_category"], *meta["secondary_categories"]]))
 
 
-def discussion(work, snapshot, repository, render):
+def discussion(work, snapshot, repository):
     url = "https://github.com/" + repository + "/issues/" + work["root_issue_number"]
     content = '<section class="discussion"><h2>Discussion & reactions</h2><p><a href="' + url + '">Comment, 👍 or 👎 on GitHub</a></p>'
     content += '<p class="note">Reactions are independent GitHub expressions, not exclusive votes or a quality score.</p>'
@@ -28,7 +28,9 @@ def discussion(work, snapshot, repository, render):
         content += '<p class="note">Last synchronized: ' + esc(snapshot["last_synced_at"]) + '. Complete and current discussion is on GitHub.</p>'
         for comment in snapshot["comments"]:
             content += '<div class="comment"><p><a href="' + url + '#issuecomment-' + esc(comment["id"]) + '">' + esc(comment["author"]) + '</a> · ' + esc(comment["updated_at"]) + '</p>'
-            content += render(comment["body"]) + '</div>'
+            # Discussion is a bounded text preview. Do not spend a manuscript's
+            # math-rendering budget on every unproved public comment.
+            content += '<div class="comment-text">' + esc(comment["body"]) + '</div></div>'
     else:
         content += '<p class="note">No discussion snapshot in this build. Open GitHub for current reactions and comments.</p>'
     return content + '</section>'
@@ -79,7 +81,7 @@ def build_papers(root, output, base, page, render, config, social=None):
         if record_assets:
             content += '<details><summary>Original image files</summary><ul>' + ''.join('<li><a href="' + image_urls[e["path"]] + '">' + esc(e["path"]) + '</a></li>' for e in record_assets) + '</ul></details>'
         content += '<article>' + render(body.decode(), image_urls) + '</article>'
-        content += discussion(work, snapshots.get(wid), config["repository"], render)
+        content += discussion(work, snapshots.get(wid), config["repository"])
         routes = ["papers/" + pid, route + "v" + v]
         if work["versions"][-1]["content_hash"] == pid:
             routes.append(route.rstrip("/"))

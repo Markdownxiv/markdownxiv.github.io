@@ -19,8 +19,9 @@ concurrent ID allocation, interrupted journal recovery and legacy migration.
 Local bare-Git tests include competing writers and a stale revision rejected after
 a non-fast-forward retry. Binary artifact tampering/path traversal/symlinks and
 stale publication rollback are also tested. The final local command
-`python -m unittest discover -s tests -v` passed **96 tests in 75.908 seconds**,
-including the additional malformed-JSON-type regression discovered during final review.
+`python -m unittest discover -s tests -v` passed **97 tests**, including malformed-JSON-type rejections and inert
+comment preview rendering. Exact per-run timings remain in the local test logs;
+the earlier 96-test hardening run took 75.908 seconds locally.
 
 Browser checks used local Chromium, desktop 1280×1000 and mobile 390×844: homepage,
 short-ID search, category search, version figure load, no mobile horizontal overflow,
@@ -118,3 +119,7 @@ performed. Exact service-side Issue character/byte limits are not claimed; this
 project enforces its own 60,000-byte envelope. Social edits/deletions/failures are
 covered with API fixtures. Real Pages quota exhaustion and large-archive rotation
 latency remain operational limits, not demonstrated throughput claims.
+
+Comment previews use bounded escaped text rather than the manuscript math renderer.
+Their full formatting stays on GitHub, and hostile discussion text cannot request
+a manuscript rendering process for every preview.
