@@ -1,7 +1,7 @@
 # V4 Validation Record
 
-Local verification on 2026-09-18 (Asia/Shanghai), before the authorized deployment.
-This record separates measured local behavior from external deployment evidence.
+Verification on 2026-09-18 (Asia/Shanghai). This record separates measured local
+behavior from the subsequently authorized production deployment.
 
 ## Calibration and Compatibility
 
@@ -60,3 +60,27 @@ Issues are reopened for feedback while submission and discussion remain PR-based
 No public test manuscript, review, reaction or project Issue is created by this
 upgrade. A real 8 MB external PR from a non-collaborator is not claimed by the local
 capacity and transport tests.
+
+## Authorized Deployment
+
+Implementation commit `e550e3e2f3fcd8a17d3e3ff91287824611619fa2` was pushed to main.
+[GitHub CI](https://github.com/kzoacn/Markdownxiv/actions/runs/35257706401) passed all
+133 tests in 22.775 seconds, all four offline CLI demos, the production-root build
+and the read-only public-source integration probe.
+
+[Production maintenance and deployment](https://github.com/kzoacn/Markdownxiv/actions/runs/35257920670)
+passed validation, archive, build, deploy and receipt finalization. The v4 epoch was
+confirmed published at `2026-09-17T18:18:04Z`. The real CLI downloaded and verified
+the v4 challenge, taxonomy and 30-second measured calibration from GitHub Pages.
+The served resource policy declares 8,000,000 bytes for material per version.
+
+Live Chromium checks at 1440x1000, 390x844 and 1920x1080 repeated subject positioning,
+navigation, copy success and denied-clipboard fallback, exact text/plain llms.txt,
+English About, existing manuscript links and search. All passed without horizontal
+overflow or JavaScript errors. The existing manuscript's downloaded SHA-256 remains
+`c97cf8a07cf3788c09371b50089b26963cc470d7bbb207bbae6859fabad47adf`.
+
+After successful deployment, repository Issues were reopened (`has_issues: true`)
+for project feedback. The acceptance workflow remains PR-only, maintenance only
+collects PRs, and ordinary Issue receipts are excluded from bot synchronization.
+No new public manuscript, Issue, review or reaction was created for this release.
