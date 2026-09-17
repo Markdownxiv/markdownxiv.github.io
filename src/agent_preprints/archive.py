@@ -120,14 +120,14 @@ def _process(root, snapshot, production, fetch_body, supplied_body, fetch_asset,
         result = evaluate(snapshot, root, production, fetch_body, supplied_body, fetch_asset, supplied_assets)
         package = result["proof"]["package"]
         record["content_hash"] = package["content_hash"]
-        from . import PROTOCOL_V2, PROTOCOL_V3
-        if package["protocol"] in (PROTOCOL_V2, PROTOCOL_V3):
+        from . import PROTOCOL_V2, PR_PROTOCOLS
+        if package["protocol"] in (PROTOCOL_V2, *PR_PROTOCOLS):
             from .works import admit
             record = admit(root, snapshot, result, record)
             published = root / "state" / "published.json"
             if published.exists() and record["paper_id"] in read_json(published)["paper_ids"]:
                 record.update({"published": True, "url": record["work_url"] + "v" + record["version"] + "/"})
-                if package["protocol"] == PROTOCOL_V3:
+                if package["protocol"] in PR_PROTOCOLS:
                     from .works import all_works, annotate
                     work = next(w for w in all_works(root) if w["work_id"] == record["work_id"])
                     entry = next(v for v in work["versions"] if v["content_hash"] == record["paper_id"])

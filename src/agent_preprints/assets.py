@@ -32,20 +32,20 @@ def filename(entry):
     return hexhash(entry["sha256"]) + "." + EXT[entry["media_type"]]
 
 
-def validate_manifest(entries):
+def validate_manifest(entries, max_image=MAX_IMAGE, max_total=MAX_ASSETS):
     require(isinstance(entries, list) and len(entries) <= MAX_IMAGES, "asset_limit", "At most 20 images.")
     total, paths = 0, []
     for item in entries:
         fields(item, ["path", "sha256", "size", "media_type"])
         paths.append(logical_path(item["path"]))
         hexhash(item["sha256"])
-        total += decimal(item["size"], 1, MAX_IMAGE)
+        total += decimal(item["size"], 1, max_image)
         require(isinstance(item["media_type"], str) and item["media_type"] in EXT,
                 "invalid_image", "Unsupported image media type.")
         require(item["path"].lower().endswith({"image/png": (".png",), "image/jpeg": (".jpg", ".jpeg"),
                                                "image/webp": (".webp",)}[item["media_type"]]),
                 "invalid_image", "Image path extension does not match declared media type.")
-    require(paths == sorted(set(paths)) and total <= MAX_ASSETS, "asset_limit", "Manifest must be sorted, unique and at most 10 MiB.")
+    require(paths == sorted(set(paths)) and total <= max_total, "asset_limit", "Manifest must be sorted, unique and within the image byte budget.")
 
 
 def _inspect_worker(conn, body):
@@ -73,8 +73,8 @@ def _inspect_worker(conn, body):
         conn.close()
 
 
-def inspect_image(body):
-    require(isinstance(body, bytes) and 0 < len(body) <= MAX_IMAGE, "asset_limit", "Image exceeds 2 MiB.")
+def inspect_image(body, max_image=MAX_IMAGE):
+    require(isinstance(body, bytes) and 0 < len(body) <= max_image, "asset_limit", "Image exceeds its byte limit.")
     ctx = multiprocessing.get_context("spawn")
     parent, child = ctx.Pipe(duplex=False)
     proc = ctx.Process(target=_inspect_worker, args=(child, body))
@@ -141,34 +141,34 @@ def references(body):
     return result
 
 
-def read_local(directory, relative):
+def read_local(directory, relative, max_image=MAX_IMAGE):
     root = Path(directory).resolve()
     path = root
     for part in logical_path(relative).split("/"):
         path = path / part
         require(not path.is_symlink(), "unsafe_asset_path", "Local asset paths cannot traverse symlinks.")
-    require(path.is_file() and path.stat().st_size <= MAX_IMAGE, "asset_limit", "Local image missing or too large.")
+    require(path.is_file() and path.stat().st_size <= max_image, "asset_limit", "Local image missing or too large.")
     return path.read_bytes()
 
 
-def collect_local(body, directory):
+def collect_local(body, directory, max_image=MAX_IMAGE, max_total=MAX_ASSETS):
     entries, data = [], {}
     for name in references(body):
-        raw = read_local(directory, name)
-        entries.append({"path": name, "sha256": sha(raw), "size": str(len(raw)), "media_type": inspect_image(raw)})
+        raw = read_local(directory, name, max_image)
+        entries.append({"path": name, "sha256": sha(raw), "size": str(len(raw)), "media_type": inspect_image(raw, max_image)})
         data[name] = raw
-    validate_manifest(entries)
+    validate_manifest(entries, max_image, max_total)
     return entries, data
 
 
-def verify(body, entries, obtain):
-    validate_manifest(entries)
+def verify(body, entries, obtain, max_image=MAX_IMAGE, max_total=MAX_ASSETS):
+    validate_manifest(entries, max_image, max_total)
     require(references(body) == [e["path"] for e in entries], "asset_manifest_mismatch", "Every image reference must match the manifest; unused assets are forbidden.")
     data = {}
     for entry in entries:
         raw = obtain(entry)
         require(isinstance(raw, bytes) and len(raw) == int(entry["size"]) and sha(raw) == entry["sha256"],
                 "asset_hash_mismatch", "Image bytes differ from the PoW-bound manifest.")
-        require(inspect_image(raw) == entry["media_type"], "invalid_image", "Decoded image type differs from manifest.")
+        require(inspect_image(raw, max_image) == entry["media_type"], "invalid_image", "Decoded image type differs from manifest.")
         data[entry["path"]] = raw
     return data

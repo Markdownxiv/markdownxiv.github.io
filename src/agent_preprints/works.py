@@ -9,7 +9,7 @@ import re
 import shutil
 from pathlib import Path
 
-from . import PROTOCOL, PROTOCOL_V2, PROTOCOL_V3, assets
+from . import PROTOCOL, PROTOCOL_V2, PR_PROTOCOLS, assets
 from .codec import canonical, read_json, sha, timestamp, utcnow
 from .errors import require
 from .protocol_v2 import document_hash, work_id
@@ -34,14 +34,14 @@ def version(record, package, number="1", summary="Initial submission"):
             "source_issue_id": record["source_issue_id"], "source_issue_number": record["source_issue_number"],
             "protocol": package["protocol"], "document_hash": document_hash(record["paper_sha256"], package.get("assets", [])),
             "change_summary": summary,
-            **({"author_homepages": package["author_homepages"]} if package["protocol"] == PROTOCOL_V3 else {})}
+            **({"author_homepages": package["author_homepages"]} if package["protocol"] in PR_PROTOCOLS else {})}
 
 
 def new_work(wid, record, package):
     return {"work_id": wid, "repository_id": record["repository_id"], "owner_id": record["submitter_id"],
             "created_at": record["received_at"], "root_issue_id": record["source_issue_id"],
             "root_issue_number": record["source_issue_number"], "versions": [version(record, package)],
-            **({"discussion_kind": "pull_request"} if package["protocol"] == PROTOCOL_V3 else {})}
+            **({"discussion_kind": "pull_request"} if package["protocol"] in PR_PROTOCOLS else {})}
 
 
 def migrate(root):

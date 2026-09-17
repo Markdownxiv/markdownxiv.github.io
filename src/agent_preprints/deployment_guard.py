@@ -13,7 +13,7 @@ def source_digest(root):
     for directory in ("papers", "challenges", "site", "src", "docs", "schemas", "works", "assets", "taxonomy", "prompts"):
         paths.extend(p for p in (root / directory).rglob("*") if p.is_file() and
                      "__pycache__" not in p.parts and p.suffix in (".json", ".md", ".py", ".css", ".js", ".svg", ".png", ".jpg", ".webp"))
-    for name in ("agent-guide.md", "requirements.lock", "pyproject.toml"):
+    for name in ("agent-guide.md", "llms.txt", "requirements.lock", "pyproject.toml"):
         if (root / name).exists():
             paths.append(root / name)
     digest = hashlib.sha256(b"agent-preprints-site-source-v1\0")

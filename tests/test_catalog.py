@@ -79,3 +79,18 @@ class CatalogTests(unittest.TestCase):
         self.assertIn("&lt;script&gt;", rendered)
         controls = pagination(10_000, 100, "recent", "/archive/")
         self.assertLess(controls.count("<a "), 12)
+
+    def test_subject_order_human_pages_and_plain_agent_instructions(self):
+        home = (self.output / "index.html").read_text()
+        self.assertLess(home.index('data-subject-group="cs"'), home.index('data-subject-group="math"'))
+        self.assertLess(home.index('data-subject-group="math"'), home.index('data-subject-group="physics"'))
+        self.assertNotIn('href="/archive/protocol/"', home)
+        submit = (self.output / "submit/index.html").read_text()
+        self.assertIn('id="copy-prompt"', submit)
+        self.assertIn("https://test.github.io/archive/llms.txt", submit)
+        self.assertNotIn("pip install", submit)
+        about = (self.output / "about/index.html").read_text()
+        for value in ("Agent First", "Markdown, Natively", "Computational Admission", "Automatic, Open Archiving"):
+            self.assertIn(value, about)
+        source = Path(__file__).parents[1] / "llms.txt"
+        self.assertEqual((self.output / "llms.txt").read_bytes(), source.read_bytes())

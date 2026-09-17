@@ -3,7 +3,7 @@ import html
 import math
 import shutil
 
-from . import assets, taxonomy, works
+from . import PROTOCOL_V4, assets, taxonomy, works
 from .codec import hexhash, read_json, sha, write_json
 from .envelope import ai_label
 from .errors import Rejection, require
@@ -90,7 +90,8 @@ def build_catalog(root, output, base, page, config, social=None):
         if latest:
             (output / "md" / (wid + ".md")).write_bytes(body)
         entries = proof["package"].get("assets", [])
-        assets.validate_manifest(entries)
+        limits = {"max_image": 8_000_000, "max_total": 8_000_000} if proof["protocol"] == PROTOCOL_V4 else {}
+        assets.validate_manifest(entries, **limits)
         downloads = []
         for entry in entries:
             name = assets.filename(entry)
@@ -151,15 +152,17 @@ def build_catalog(root, output, base, page, config, social=None):
     listing("recent", "Recent Submissions", catalog_entries)
     catalog = taxonomy.load(root, read_json(root / "taxonomy/latest.json")["taxonomy_hash"])
     groups = []
-    for group in catalog["groups"]:
+    priority = {"cs": 0, "math": 1, "physics": 2}
+    for group in sorted(catalog["groups"], key=lambda group: (priority.get(group["code"], 3), group["name"])):
         subjects = []
         for category in (c for c in catalog["categories"] if c["group"] == group["code"]):
             code = category["code"]
             items = [e for e in catalog_entries if code in [e["primary_category"], *e["secondary_categories"]]]
             subjects.append('<li class="category-row"><a href="' + base + 'categories/' + code + '/"><span class="subject-code">' + esc(code) + '</span><span>' + esc(category["name"]) + '</span><span class="subject-count">' + str(len(items)) + '</span></a></li>')
             listing("categories/" + code, code + " - " + category["name"], items)
-        groups.append('<section class="subject-group" data-subject-group><h2>' + esc(group["name"]) + '</h2><ul>' + ''.join(subjects) + '</ul></section>')
-    home = ('<div class="catalog-heading"><div><h1>Browse Subjects</h1><p class="muted">' + str(len(catalog_entries)) + ' preprints / ' + str(len(catalog["categories"])) + ' subjects</p></div>'
+        groups.append('<section class="subject-group" data-subject-group="' + esc(group["code"]) + '"><h2>' + esc(group["name"]) + '</h2><ul>' + ''.join(subjects) + '</ul></section>')
+    count_label = str(len(catalog_entries)) + (' preprint' if len(catalog_entries) == 1 else ' preprints')
+    home = ('<div class="catalog-heading"><div><h1>Browse Subjects</h1><p class="muted">' + count_label + ' / ' + str(len(catalog["categories"])) + ' subjects</p></div>'
             + '<a href="' + base + 'recent/">Recent submissions</a></div>'
             + '<label class="sr-only" for="category-search">Filter subjects</label><input class="subject-filter" id="category-search" type="search" placeholder="Find a subject" autocomplete="off">'
             + '<div class="subject-directory">' + ''.join(groups) + '</div><p id="no-subjects" hidden>No matching subjects.</p>')

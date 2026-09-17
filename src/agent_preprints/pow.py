@@ -15,7 +15,7 @@ IMPLEMENTATION = "python-hashlib-copy-sha256-u64be-v1"
 def header(repository_id, epoch_hash, submitter_id, content_hash, protocol="agent-preprints-v1"):
     decimal(repository_id, 1)
     decimal(submitter_id, 1)
-    require(protocol in ("agent-preprints-v1", "agent-preprints-v2", "agent-preprints-v3"), "protocol_version", "Unsupported PoW protocol.")
+    require(protocol in ("agent-preprints-v1", "agent-preprints-v2", "agent-preprints-v3", "agent-preprints-v4"), "protocol_version", "Unsupported PoW protocol.")
     domain = ("agent-preprints-pow-" + protocol.rsplit("-", 1)[1]).encode("ascii")
     parts = [domain, repository_id.encode("ascii"),
              bytes.fromhex(hexhash(epoch_hash)), submitter_id.encode("ascii"),
@@ -119,8 +119,9 @@ def cpu_name():
     return platform.processor() or "unknown (operator must identify reference CPU)"
 
 
-def calibrate(seconds=10, cpu=None, conditions="unspecified load; operator must record conditions"):
+def calibrate(seconds=10, cpu=None, conditions="unspecified load; operator must record conditions", expected_seconds=300):
     require(1 <= seconds <= 600, "input_limit", "Benchmark duration must be 1–600 seconds.")
+    require(expected_seconds in (30, 300), "calibration_required", "Supported reference expectations are 30 and 300 seconds.")
     # Same header length and hot loop as mine. No nonce search happens in verification.
     head = header("123456789", "00" * 32, "12345678", "11" * 32)
     base = hashlib.sha256(head)
@@ -133,19 +134,23 @@ def calibrate(seconds=10, cpu=None, conditions="unspecified load; operator must 
             raise RuntimeError("Impossible zero-target result")
         count += 8192
         elapsed = time.perf_counter_ns() - started
-    target = min((1 << 256) - 1, ((1 << 256) * elapsed) // (count * 300 * 1_000_000_000))
+    target = min((1 << 256) - 1, ((1 << 256) * elapsed) // (count * expected_seconds * 1_000_000_000))
     return {"profile": "production", "implementation": IMPLEMENTATION, "cpu": cpu or cpu_name(),
             "threads": "1", "python": sys.version.split()[0], "platform": platform.platform(),
             "conditions": conditions, "measured_at": utcnow(), "attempts": str(count),
-            "elapsed_ns": str(elapsed), "expected_seconds": "300", "target": f"{target:064x}"}
+            "elapsed_ns": str(elapsed), "expected_seconds": str(expected_seconds), "target": f"{target:064x}",
+            **({"calibration_version": "ap-calibration-v2"} if expected_seconds == 30 else {})}
 
 
-def validate_calibration(value):
+def validate_calibration(value, expected_seconds=300):
     from .codec import fields, timestamp
     fields(value, ["profile", "implementation", "cpu", "threads", "python", "platform", "conditions",
-                   "measured_at", "attempts", "elapsed_ns", "expected_seconds", "target"])
+                   "measured_at", "attempts", "elapsed_ns", "expected_seconds", "target"]
+           + (["calibration_version"] if expected_seconds == 30 else []))
+    require(expected_seconds in (30, 300) and (expected_seconds != 30 or value["calibration_version"] == "ap-calibration-v2"),
+            "calibration_required", "Unsupported calibration version.")
     require(value["profile"] == "production" and value["implementation"] == IMPLEMENTATION
-            and value["threads"] == "1" and value["expected_seconds"] == "300",
+            and value["threads"] == "1" and value["expected_seconds"] == str(expected_seconds),
             "calibration_required", "Unsupported production calibration.")
     count = decimal(value["attempts"], 8192)
     elapsed = decimal(value["elapsed_ns"], 1_000_000_000, 610_000_000_000)
@@ -153,5 +158,5 @@ def validate_calibration(value):
     for key in ("cpu", "conditions", "platform", "python"):
         require(isinstance(value[key], str) and 1 <= len(value[key]) <= 1024,
                 "calibration_required", "Calibration conditions are incomplete.")
-    expected = min((1 << 256) - 1, ((1 << 256) * elapsed) // (count * 300 * 1_000_000_000))
+    expected = min((1 << 256) - 1, ((1 << 256) * elapsed) // (count * expected_seconds * 1_000_000_000))
     require(target_int(value["target"]) == expected, "calibration_required", "Target does not match measured attempts and duration.")

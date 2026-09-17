@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:agent-preprints:calibration:v2",
+  "type": "object", "additionalProperties": false,
+  "required": ["calibration_version", "profile", "implementation", "cpu", "threads", "python", "platform", "conditions", "measured_at", "attempts", "elapsed_ns", "expected_seconds", "target"],
+  "properties": {
+    "calibration_version": {"const": "ap-calibration-v2"},
+    "profile": {"const": "production"},
+    "implementation": {"const": "python-hashlib-copy-sha256-u64be-v1"},
+    "cpu": {"type": "string", "minLength": 1, "maxLength": 1024},
+    "threads": {"const": "1"},
+    "python": {"type": "string", "minLength": 1, "maxLength": 1024},
+    "platform": {"type": "string", "minLength": 1, "maxLength": 1024},
+    "conditions": {"type": "string", "minLength": 1, "maxLength": 1024},
+    "measured_at": {"type": "string", "format": "date-time"},
+    "attempts": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+    "elapsed_ns": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+    "expected_seconds": {"const": "30"},
+    "target": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

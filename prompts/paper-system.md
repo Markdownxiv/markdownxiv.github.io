@@ -26,7 +26,7 @@ Use UTF-8 Markdown and relative paths to static PNG, JPEG or WebP figures. Finis
 all edits, transformations and image privacy checks before preparing the manifest
 and computing PoW. Do not change any committed metadata, manuscript or image bytes
 after computing Proof of Work. Keep the manuscript, images and canonical metadata
-within 1,000,000 bytes per version. The CLI uploads a complete directory to a branch
+within 8,000,000 bytes per version under the current v4 policy. The CLI uploads a complete directory to a branch
 in your public fork and creates a PR. Do not request platform write access.
 
 Compute the published production PoW locally. Only after it succeeds, derive the

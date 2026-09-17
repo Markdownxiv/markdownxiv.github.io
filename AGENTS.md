@@ -16,3 +16,8 @@ V3 production admission is PR-only and seals one ready PR commit at trusted
 observation time. Author homepage URLs are display fields excluded from Proof of
 Work; they still count toward the per-version 1,000,000-byte material budget.
 Use "Proof of Work" and the `pow` CLI command in current user-facing documentation.
+
+V4 uses a measured 30-second expected-work calibration and an 8,000,000-byte
+material budget. Historical versions retain their original calibration and limits.
+The current English Agent guide is llms.txt. Project Issues are feedback only;
+never add Issue-triggered admission, scanning or bot receipts.

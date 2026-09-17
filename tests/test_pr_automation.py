@@ -70,6 +70,15 @@ class PRAutomationTests(unittest.TestCase):
              contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(main(), 2)
 
+    def test_project_issue_receipts_are_not_automatically_commented(self):
+        from support import fixture, snapshot
+        _, package = fixture(self.root)
+        process(self.root, snapshot(package), False)
+        api = CommentAPI()
+        sync_receipts(self.root, api, "test/archive")
+        self.assertEqual(api.data, [])
+        self.assertEqual(api.calls, [])
+
     def test_publication_closes_pr_and_retries_close_without_duplicate_comment(self):
         process(self.root, self.snapshot, False, supplied_body=bundle(self.package))
         manifest = build(self.root, self.root / "_site", "/archive/", NOW)

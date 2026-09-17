@@ -10,6 +10,8 @@ on:
       - 'schemas/**'
       - 'taxonomy/**'
       - 'prompts/**'
+      - 'llms.txt'
+      - 'agent-guide.md'
       - 'pyproject.toml'
       - 'requirements.lock'
       - '.github/workflows/**'
@@ -34,6 +36,7 @@ jobs:
           python examples/local_demo.py --out .demo
           python examples/local_demo_v2.py --out .demo-v2
           python examples/local_demo_v3.py --out .demo-v3
+          python examples/local_demo_v4.py --out .demo-v4
           preprints build --out _site
       - name: Verify public source reads outside the token repository
         run: python examples/check_public_source.py

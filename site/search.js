@@ -1,4 +1,22 @@
 "use strict";
+const copyPrompt = document.querySelector("#copy-prompt");
+if (copyPrompt) {
+  copyPrompt.addEventListener("click", async () => {
+    const prompt = document.querySelector("#submission-prompt");
+    const status = document.querySelector("#copy-status");
+    try {
+      await navigator.clipboard.writeText(prompt.textContent);
+      status.textContent = "Copied.";
+    } catch (_) {
+      const range = document.createRange();
+      range.selectNodeContents(prompt);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      status.textContent = "Copy unavailable. Prompt selected.";
+    }
+  });
+}
 const categorySearch = document.querySelector("#category-search");
 if (categorySearch) {
   categorySearch.addEventListener("input", () => {

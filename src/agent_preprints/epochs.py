@@ -3,7 +3,7 @@ import secrets
 from datetime import timedelta
 from pathlib import Path
 
-from . import PROTOCOL, VERIFIER, PROTOCOL_V2, VERIFIER_V2, PROTOCOL_V3, VERIFIER_V3
+from . import PROTOCOL, VERIFIER, PROTOCOL_V2, VERIFIER_V2, PROTOCOL_V3, VERIFIER_V3, PROTOCOL_V4, VERIFIER_V4, PR_PROTOCOLS
 from .codec import (canonical, decimal, fields, hexhash, read_json, sha,
                     timestamp, utcnow, write_json)
 from .errors import Rejection, require
@@ -12,25 +12,26 @@ from .pow import target_int, validate_calibration
 
 
 def epoch_path(root, epoch_id):
-    require(isinstance(epoch_id, str) and re.fullmatch(r"(?:dev-)?(?:v[23]-)?\d{4}-\d{2}-\d{2}", epoch_id),
+    require(isinstance(epoch_id, str) and re.fullmatch(r"(?:dev-)?(?:v[234]-)?\d{4}-\d{2}-\d{2}", epoch_id),
             "unknown_epoch", "Invalid epoch identifier.")
     return Path(root) / "challenges" / "epochs" / (epoch_id + ".json")
 
 
 def validate_epoch(epoch, production=True):
-    v2 = isinstance(epoch, dict) and epoch.get("protocol") in (PROTOCOL_V2, PROTOCOL_V3)
-    v3 = isinstance(epoch, dict) and epoch.get("protocol") == PROTOCOL_V3
+    v2 = isinstance(epoch, dict) and epoch.get("protocol") in (PROTOCOL_V2, *PR_PROTOCOLS)
     fields(epoch, ["protocol", "verifier", "epoch_id", "profile", "repository_id", "not_before",
                    "expires_at", "salt", "target", "calibration_id", "question_count", "poa_policy"]
            + (["taxonomy_hash", "resource_policy"] if v2 else []))
-    require((epoch["protocol"], epoch["verifier"]) in ((PROTOCOL, VERIFIER), (PROTOCOL_V2, VERIFIER_V2), (PROTOCOL_V3, VERIFIER_V3)),
+    require((epoch["protocol"], epoch["verifier"]) in ((PROTOCOL, VERIFIER), (PROTOCOL_V2, VERIFIER_V2), (PROTOCOL_V3, VERIFIER_V3), (PROTOCOL_V4, VERIFIER_V4)),
             "protocol_version", "Unsupported protocol or verifier version.")
     epoch_path(".", epoch["epoch_id"])
-    require(("v3-" in epoch["epoch_id"]) == v3 and ("v2-" in epoch["epoch_id"]) == (v2 and not v3), "invalid_epoch", "Epoch identifier/protocol mismatch.")
+    for prefix, protocol in (("v2-", PROTOCOL_V2), ("v3-", PROTOCOL_V3), ("v4-", PROTOCOL_V4)):
+        require((prefix in epoch["epoch_id"]) == (epoch["protocol"] == protocol), "invalid_epoch", "Epoch identifier/protocol mismatch.")
     if v2:
         from .assets import POLICY
-        if v3:
-            from .protocol_v3 import POLICY
+        if epoch["protocol"] in PR_PROTOCOLS:
+            from .protocol import pr_protocol
+            POLICY = pr_protocol(epoch["protocol"]).POLICY
         hexhash(epoch["taxonomy_hash"])
         require(epoch["resource_policy"] == POLICY, "invalid_policy", "Unsupported resource policy.")
     require(epoch["profile"] in ("production", "development") and
@@ -52,13 +53,14 @@ def validate_epoch(epoch, production=True):
     validate_policy(epoch["poa_policy"], production=epoch["profile"] == "production")
 
 
-def initialize(root, calibration, repository, repository_id, site_url):
+def initialize(root, calibration, repository, repository_id, site_url, protocol=PROTOCOL):
     from .github import repository_name
     from .site import site_address
     repository_name(repository)
     decimal(repository_id, 1)
     site_address(site_url)
-    validate_calibration(calibration)
+    require(protocol in (PROTOCOL, PROTOCOL_V2, *PR_PROTOCOLS), "protocol_version", "Unsupported protocol.")
+    validate_calibration(calibration, 30 if protocol == PROTOCOL_V4 else 300)
     root = Path(root)
     raw = canonical(calibration) + b"\n"
     cid = sha(raw)
@@ -69,7 +71,8 @@ def initialize(root, calibration, repository, repository_id, site_url):
     else:
         path.write_bytes(raw)
     write_json(root / "config" / "production.json", {"repository": repository, "repository_id": repository_id,
-               "site_url": site_url.rstrip("/") + "/", "calibration_id": cid, "enabled": True})
+               "site_url": site_url.rstrip("/") + "/", "calibration_id": cid, "enabled": True,
+               **({"protocol": protocol} if protocol != PROTOCOL else {})})
     return cid
 
 
@@ -92,10 +95,10 @@ def rotate(root, now=None, development=False, repository_id="1", protocol=None):
         require(cal_path.exists(), "calibration_required", "Published calibration file is missing.")
         require(sha(cal_path.read_bytes()) == cid, "calibration_required", "Calibration hash mismatch.")
         calibration = read_json(cal_path)
-        validate_calibration(calibration)
+        validate_calibration(calibration, 30 if protocol == PROTOCOL_V4 else 300)
         profile, target, policy = "production", calibration["target"], PRODUCTION_POLICY
         repository_id = config["repository_id"]
-    require(protocol in (PROTOCOL, PROTOCOL_V2, PROTOCOL_V3), "protocol_version", "Unsupported epoch protocol.")
+    require(protocol in (PROTOCOL, PROTOCOL_V2, *PR_PROTOCOLS), "protocol_version", "Unsupported epoch protocol.")
     eid = ("dev-" if development else "") + (protocol.rsplit("-", 1)[1] + "-" if protocol != PROTOCOL else "") + moment.strftime("%Y-%m-%d")
     path = epoch_path(root, eid)
     registry_path = root / "challenges" / "registry.json"
@@ -108,16 +111,16 @@ def rotate(root, now=None, development=False, repository_id="1", protocol=None):
                 "immutable_conflict", "Existing epoch is absent from registry or was modified.")
     else:
         # Never backdate publication, even when a scheduled run starts late.
-        epoch = {"protocol": protocol, "verifier": {PROTOCOL: VERIFIER, PROTOCOL_V2: VERIFIER_V2, PROTOCOL_V3: VERIFIER_V3}[protocol], "epoch_id": eid, "profile": profile,
+        epoch = {"protocol": protocol, "verifier": {PROTOCOL: VERIFIER, PROTOCOL_V2: VERIFIER_V2, PROTOCOL_V3: VERIFIER_V3, PROTOCOL_V4: VERIFIER_V4}[protocol], "epoch_id": eid, "profile": profile,
                  "repository_id": repository_id, "not_before": now,
                  "expires_at": (moment + timedelta(hours=48)).strftime("%Y-%m-%dT%H:%M:%SZ"),
                  "salt": secrets.token_hex(32), "target": target, "calibration_id": cid, "question_count": "2", "poa_policy": policy}
-        if protocol in (PROTOCOL_V2, PROTOCOL_V3):
+        if protocol in (PROTOCOL_V2, *PR_PROTOCOLS):
             from . import assets, taxonomy
             epoch.update({"taxonomy_hash": taxonomy.ensure(root), "resource_policy": assets.POLICY})
-            if protocol == PROTOCOL_V3:
-                from .protocol_v3 import POLICY
-                epoch["resource_policy"] = POLICY
+            if protocol in PR_PROTOCOLS:
+                from .protocol import pr_protocol
+                epoch["resource_policy"] = pr_protocol(protocol).POLICY
         validate_epoch(epoch, not development)
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("xb") as stream:
@@ -162,6 +165,6 @@ def load_epoch(root, eid, expected_hash, received_at, repository_id, production=
         require(cal_path.is_file() and sha(cal_path.read_bytes()) == cid,
                 "calibration_required", "Epoch calibration is missing or corrupted.")
         cal = read_json(cal_path)
-        validate_calibration(cal)
+        validate_calibration(cal, 30 if epoch["protocol"] == PROTOCOL_V4 else 300)
         require(cal["target"] == epoch["target"], "calibration_required", "Epoch target differs from calibration.")
     return epoch

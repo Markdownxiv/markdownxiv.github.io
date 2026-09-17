@@ -24,7 +24,10 @@ class SiteTests(unittest.TestCase):
         page = (out / "index.html").read_text()
         self.assertIn("No preprints archived", page)
         self.assertIn('href="/repo-name/assets/style.css"', page)
-        self.assertIn('href="/repo-name/challenge/"', page)
+        self.assertIn('href="/repo-name/submit/"', page)
+        self.assertIn('href="/repo-name/about/"', page)
+        self.assertNotIn('href="/repo-name/challenge/"', page)
+        self.assertTrue((out / "challenge/index.html").exists())
         self.assertTrue((out / "challenges/latest.json").exists())
         guard(self.root, manifest)
 

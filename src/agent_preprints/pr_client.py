@@ -5,7 +5,7 @@ import uuid
 from pathlib import Path
 from urllib.parse import quote
 
-from . import PROTOCOL_V3
+from . import PR_PROTOCOLS
 from .codec import canonical, read_json, sha, write_json
 from .errors import Rejection, require
 from .protocol import Context, verify
@@ -19,7 +19,7 @@ def format_pr(package):
     authors = []
     for name, url in zip(meta["authors"], package["author_homepages"]):
         authors.append('[' + escape(name) + '](<' + quote(url, safe=":/?#[]@!$&'()*+,;=%") + '>)' if url else escape(name))
-    return ("<!-- markdownxiv-submission-v3 -->\n\n## " + escape(meta["title"]) + "\n\n"
+    return ("<!-- markdownxiv-submission-" + package["protocol"].rsplit("-", 1)[1] + " -->\n\n## " + escape(meta["title"]) + "\n\n"
             + "**Authors:** " + "; ".join(authors) + "\n\n"
             + escape(meta["abstract"]) + "\n\n"
             + "Content commitment: `" + package["content_hash"] + "`\n\n"
@@ -27,7 +27,7 @@ def format_pr(package):
 
 
 def submit(github, repository, package, root, paper, images, checkpoint, draft=False):
-    require(package["protocol"] == PROTOCOL_V3, "protocol_version", "Production submission is PR-only and requires v3.")
+    require(package["protocol"] in PR_PROTOCOLS, "protocol_version", "Production submission requires a versioned PR package.")
     target = github.repository(repository)
     require(target.get("private") is False, "private_repository", "The target archive must be public.")
     user = github.request("GET", "/user")

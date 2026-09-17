@@ -2,12 +2,12 @@
 import re
 from contextlib import nullcontext
 
-from . import PROTOCOL_V3
+from . import PR_PROTOCOLS
 from .codec import canonical, decimal, fields, loads, sha, utcnow
 from .errors import require
 from .github import repository_name, wall_timeout
-from .protocol import Context, verify, verify_pow
-from .protocol_v3 import MAX_MATERIAL, metadata_file, validate_package
+from .protocol import Context, pr_protocol, verify, verify_pow
+from .protocol_v3 import metadata_file
 
 DIRECTORY = re.compile(r"submissions/[0-9a-f]{32}\Z")
 SOURCE_FIELDS = ["repository", "head_repository", "head_repository_id", "head_sha", "base_sha"]
@@ -58,7 +58,7 @@ def read_package(snapshot, github):
             "source_mismatch", "PR source repository identity changed.")
     # Compare exact objects, never the PR's potentially edited branch.
     compare = github.request("GET", "/repos/" + origin["head_repository"] + "/compare/"
-                             + origin["base_sha"] + "..." + origin["head_sha"], limit=4_000_000)
+                             + origin["base_sha"] + "..." + origin["head_sha"], limit=24_000_000)
     require(compare.get("base_commit", {}).get("sha") == origin["base_sha"], "source_mismatch", "PR base commit mismatch.")
     files = compare.get("files")
     require(isinstance(files, list) and 3 <= len(files) <= 23,
@@ -77,7 +77,8 @@ def read_package(snapshot, github):
                                   "commit": origin["head_sha"], "path": directory + "/" + relative},
                                  cap, image=image, data=data)
     package = loads(get("submission.json", 60_000, data=True))
-    validate_package(package)
+    require(isinstance(package, dict), "invalid_fields", "Submission package must be an object.")
+    pr_protocol(package.get("protocol")).validate_package(package)
     expected = {directory + "/" + name for name in ("paper.md", "metadata.json", "submission.json")}
     expected.update(directory + "/" + e["path"] for e in package["assets"])
     require(len(names) == len(set(names)) and set(names) == expected,
@@ -95,11 +96,11 @@ def evaluate(snapshot, root, production=True, github=None, bundle=None):
             require(not production and isinstance(bundle, dict), "trusted_context_required", "Production PR validation requires sealed Git objects.")
             fields(bundle, ["package", "paper", "metadata", "assets"])
             package = bundle["package"]
-        require(package["protocol"] == PROTOCOL_V3, "protocol_version", "New PR submissions require protocol v3.")
+        require(package["protocol"] in PR_PROTOCOLS, "protocol_version", "New submissions require a versioned PR package.")
         verify_pow(package, root, context, production)
         if github is not None:
             meta = get("metadata.json", 60_000, data=True)
-            body = get("paper.md", MAX_MATERIAL)
+            body = get("paper.md", pr_protocol(package["protocol"]).MAX_MATERIAL)
             images = {e["path"]: get(e["path"], int(e["size"]), image=True) for e in package["assets"]}
         else:
             meta, body, images = bundle["metadata"], bundle["paper"], bundle["assets"]

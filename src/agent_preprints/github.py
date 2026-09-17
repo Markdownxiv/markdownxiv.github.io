@@ -180,10 +180,6 @@ class GitHub:
         decimal(str(number), 1)
         return self.request("GET", "/repos/" + repository_name(repository) + "/issues/" + str(number))
 
-    def issues_page(self, repository, page):
-        return self.request("GET", "/repos/" + repository_name(repository) +
-                            "/issues?state=all&sort=created&direction=asc&per_page=100&page=" + str(page))
-
     def comments(self, repository, number, page=1):
         return self.request("GET", "/repos/" + repository_name(repository) + "/issues/" + str(number) +
                             "/comments?per_page=100&page=" + str(page))

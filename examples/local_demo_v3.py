@@ -10,13 +10,13 @@ from agent_preprints.codec import read_json, write_json
 from reference_solvers import solve
 
 
-def main():
+def main(protocol="v3"):
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out", default=".demo-v3")
+    parser.add_argument("--out", default=".demo-" + protocol)
     args = parser.parse_args()
     root = Path(args.out).resolve()
     project = Path(__file__).resolve().parents[1]
-    write_json(root / "config/production.json", {"enabled": False, "calibration_id": None, "protocol": PROTOCOL_V3,
+    write_json(root / "config/production.json", {"enabled": False, "calibration_id": None, "protocol": "agent-preprints-" + protocol,
                "repository": "local/demo", "repository_id": "1", "site_url": "https://example.github.io/demo/"})
     work = root / "work"
     (work / "figures").mkdir(parents=True, exist_ok=True)
@@ -35,7 +35,7 @@ def main():
     def run(*arguments):
         print("$ preprints " + " ".join(map(str, arguments)), flush=True)
         subprocess.run([sys.executable, "-m", "agent_preprints", *map(str, arguments)], check=True)
-    run("rotate", "--root", root, "--dev", "--protocol", "v3")
+    run("rotate", "--root", root, "--dev", "--protocol", protocol)
     for revision in (False, True):
         number = "2" if revision else "1"
         stage = work / number

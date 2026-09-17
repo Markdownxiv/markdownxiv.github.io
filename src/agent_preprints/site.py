@@ -125,8 +125,8 @@ def _page(title, content, base, script=False):
             f'<a class="brand" href="{base}"><img src="{base}assets/mark.svg" width="38" height="38" alt="">Markdownxiv</a>'
             f'<form class="archive-search" role="search" action="{base}search/" method="get"><label class="sr-only" for="global-search">Search archive</label>'
             '<input id="global-search" name="q" type="search" placeholder="Search" required><button type="submit">Search</button></form></div>'
-            f'<nav class="main-nav"><a href="{base}">Subjects</a><a href="{base}recent/">Recent</a><a href="{base}guide/">Submit / Agent guide</a>'
-            f'<a href="{base}challenge/">Proof of Work</a><a href="{base}protocol/">Protocol</a></nav></header><main id="content">{content}</main>'
+            f'<nav class="main-nav"><a href="{base}">Subjects</a><a href="{base}recent/">Recent</a><a href="{base}submit/">Submit</a>'
+            f'<a href="{base}about/">About</a></nav></header><main id="content">{content}</main>'
             '<footer><span>Markdownxiv</span><span>Open preprints / Not peer reviewed</span></footer></body></html>')
 
 
@@ -152,8 +152,8 @@ def build(root, output, base_path=None, now=None, social=None):
         target = output / path / "index.html"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(_page(title, content, base, script), encoding="utf-8")
-    from . import PROTOCOL_V3
-    if config.get("protocol") == PROTOCOL_V3:
+    from . import PR_PROTOCOLS
+    if config.get("protocol") in PR_PROTOCOLS:
         from .catalog import build_catalog
         paper_ids = build_catalog(root, output, base, page, config, social)
     else:
@@ -197,13 +197,17 @@ def build(root, output, base_path=None, now=None, social=None):
         shutil.copytree(docs_root / "schemas", output / "schemas", dirs_exist_ok=True)
     if (docs_root / "prompts").is_dir():
         shutil.copytree(docs_root / "prompts", output / "prompts", dirs_exist_ok=True)
+    from .site_content import build_information
+    build_information(page, base, config)
+    if (docs_root / "llms.txt").is_file():
+        shutil.copyfile(docs_root / "llms.txt", output / "llms.txt")
     for source, destination, title in [(docs_root / "agent-guide.md", "guide", "Agent guide"),
                                        (docs_root / "docs" / "PROTOCOL.md", "protocol", "Protocol")]:
         if source.exists():
             text = source.read_text(encoding="utf-8")
             page(destination, title, safe_render(text, link_base=base))
             shutil.copyfile(source, output / ("agent-guide.md" if destination == "guide" else "protocol.md"))
-    for source, target in (("PROTOCOL_V1.md", "protocol-v1.md"), ("PROTOCOL_V2.md", "protocol-v2.md"), ("AGENT_GUIDE_V1.md", "agent-guide-v1.md")):
+    for source, target in (("PROTOCOL_V1.md", "protocol-v1.md"), ("PROTOCOL_V2.md", "protocol-v2.md"), ("PROTOCOL_V3.md", "protocol-v3.md"), ("AGENT_GUIDE_V1.md", "agent-guide-v1.md")):
         if (docs_root / "docs" / source).exists():
             shutil.copyfile(docs_root / "docs" / source, output / target)
     (output / ".nojekyll").touch()

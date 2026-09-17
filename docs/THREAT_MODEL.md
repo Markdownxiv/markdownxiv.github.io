@@ -13,7 +13,8 @@ A participant can create forks and PRs, modify draft files, edit descriptions, p
 new commits, forge Git author timestamps, provide malformed JSON/Markdown/images,
 post comments, use multiple accounts, replay proofs and outsource all computation.
 These capabilities never grant archive write permission or execution of submitted
-programs. New production requests are v3 ready PRs, not Issues.
+programs. Current production requests are v4 ready PRs. Previously published v3
+epochs retain their original lifetime and semantics. Issues are project feedback.
 
 The workflow uses `pull_request_target` but always checks out trusted default-branch
 code. It never checks out or merges the contributor branch. Regular code CI does
@@ -48,7 +49,7 @@ exclusive account ownership, peer review or resistance to outsourced answers.
 
 ## Storage and presentation
 
-Material size is at most 1,000,000 bytes per version including canonical metadata
+V4 material size is at most 8,000,000 bytes per version including canonical metadata
 and homepage display fields. The request proof and generated archived proof have
 independent limits. Declared sizes are checked against actual bytes. Image count,
 pixels, parser limits and isolated decoder resource limits still apply. Material is
@@ -80,4 +81,5 @@ site limit leaves operational headroom but does not provide unlimited archive sc
 PR acceptance closes the discussion PR rather than merging its branch. Closing or
 commenting can fail independently and is retried; a comment does not substitute for
 an actual archive commit or deployment. Local API fixtures and bare-Git tests do not
-establish live behavior from a non-collaborator account with repository Issues disabled.
+establish live behavior from a non-collaborator account. Project Issues are not scanned
+or given admission receipts. Their reopening does not enable Issue submission.

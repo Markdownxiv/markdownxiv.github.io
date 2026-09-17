@@ -6,7 +6,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from agent_preprints.archive import capture, evaluate, mark_deployed, process, public_receipt, receipt_path
-from agent_preprints.automation import collect, parse_comment, sync_receipts, upsert_comment
+from agent_preprints.automation import parse_comment, upsert_comment
+from legacy_automation import collect, sync_receipts
 from agent_preprints.codec import canonical, content_hash, read_json, write_json
 from agent_preprints.errors import Rejection
 from agent_preprints.site import build

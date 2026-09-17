@@ -1,18 +1,19 @@
 import argparse
 import json
 import os
+import subprocess
 import sys
 import time
 import urllib.request
 from pathlib import Path
 
-from . import poa, pow, PROTOCOL_V2, PROTOCOL_V3
+from . import poa, pow, PROTOCOL_V2, PROTOCOL_V3, PROTOCOL_V4, PR_PROTOCOLS
 from .archive import capture, process, public_receipt
 from .codec import MAX_PAPER, canonical, loads, read_json, sha, utcnow, write_json
 from .epochs import epoch_path, initialize, load_epoch, rotate, validate_epoch
 from .errors import Rejection, require
 from .github import GitHub, NoRedirect, bounded_read, repository_name, wall_timeout
-from .protocol import Context, prepare, verify, verify_pow
+from .protocol import Context, pr_protocol, prepare, verify, verify_pow
 from .site import build, site_address
 
 
@@ -25,12 +26,26 @@ def _client_context(package, at=None):
 
 
 def _local_assets(args, package):
-    from .assets import read_local
+    from .assets import read_local, MAX_IMAGE
     directory = getattr(args, "assets_dir", None)
     if directory is None and getattr(args, "paper", None):
         directory = Path(args.paper).parent
-    return ({e["path"]: read_local(directory, e["path"]) for e in package.get("assets", [])}
+    cap = pr_protocol(package["protocol"]).MAX_MATERIAL if package["protocol"] == PROTOCOL_V4 else MAX_IMAGE
+    return ({e["path"]: read_local(directory, e["path"], cap) for e in package.get("assets", [])}
             if directory is not None else None)
+
+
+def participant_token(required=False):
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if token:
+        return token
+    try:
+        result = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True, timeout=10)
+        token = result.stdout.strip() if result.returncode == 0 else None
+    except (OSError, subprocess.TimeoutExpired):
+        token = None
+    require(token or not required, "auth_required", "Sign in with gh auth login, or provide a participant GH_TOKEN locally.")
+    return token
 
 
 def download_challenge(site, output):
@@ -54,7 +69,7 @@ def download_challenge(site, output):
     require(sha(raw) == latest["epoch_hash"], "epoch_hash_mismatch", "Downloaded epoch hash mismatch.")
     epoch = loads(raw)
     validate_epoch(epoch)
-    if epoch["protocol"] in (PROTOCOL_V2, PROTOCOL_V3):
+    if epoch["protocol"] in (PROTOCOL_V2, *PR_PROTOCOLS):
         from .codec import hexhash
         digest = hexhash(epoch["taxonomy_hash"])
         catalog = get("taxonomy/" + digest + ".json")
@@ -90,17 +105,19 @@ def parser():
         cmd.add_argument("--cpu")
         cmd.add_argument("--conditions", required=True)
         cmd.add_argument("--out", required=True)
+        cmd.add_argument("--expected-seconds", type=int, choices=(30, 300), default=30)
     cmd = sub.add_parser("init-production", help="Write local production configuration; never pushes")
     cmd.add_argument("--root", default=".")
     cmd.add_argument("--calibration", required=True)
     cmd.add_argument("--repository", required=True)
     cmd.add_argument("--repository-id", required=True)
     cmd.add_argument("--site-url", required=True)
+    cmd.add_argument("--protocol", choices=("v1", "v2", "v3", "v4"), default="v4")
     cmd = sub.add_parser("rotate")
     cmd.add_argument("--root", default=".")
     cmd.add_argument("--dev", action="store_true")
     cmd.add_argument("--repository-id", default="1")
-    cmd.add_argument("--protocol", choices=("v1", "v2", "v3"), help="Choose a development protocol; current PR submissions use v3")
+    cmd.add_argument("--protocol", choices=("v1", "v2", "v3", "v4"), help="Choose a development protocol; current submissions use v4")
     cmd = sub.add_parser("challenge")
     cmd.add_argument("--root", default=".")
     cmd.add_argument("--site")
@@ -183,15 +200,12 @@ def parser():
 def execute(args):
     command = args.command
     if command in ("calibrate", "benchmark"):
-        measurement = pow.calibrate(args.seconds, args.cpu, args.conditions)
+        measurement = pow.calibrate(args.seconds, args.cpu, args.conditions, args.expected_seconds)
         write_json(args.out, measurement)
         _emit(measurement)
     elif command == "init-production":
-        cid = initialize(args.root, read_json(args.calibration), args.repository, args.repository_id, args.site_url)
-        config_path = Path(args.root) / "config/production.json"
-        config = read_json(config_path)
-        config["protocol"] = PROTOCOL_V3
-        write_json(config_path, config)
+        cid = initialize(args.root, read_json(args.calibration), args.repository, args.repository_id, args.site_url,
+                         "agent-preprints-" + args.protocol)
         from . import taxonomy
         taxonomy.ensure(args.root)
         _emit({"calibration_id": cid, "status": "configured_locally"})
@@ -212,7 +226,7 @@ def execute(args):
         from .protocol import validate_package
         package = read_json(args.package, 60000)
         validate_package(package)
-        require(package["protocol"] == PROTOCOL_V3, "protocol_version", "PR formatting requires v3.")
+        require(package["protocol"] in PR_PROTOCOLS, "protocol_version", "PR formatting requires a v3 or v4 package.")
         Path(args.out).write_text(format_pr(package), encoding="utf-8")
         _emit({"status": "formatted", "bytes": str(Path(args.out).stat().st_size)})
     elif command == "work":
@@ -243,14 +257,15 @@ def execute(args):
         epoch = load_epoch(args.root, latest["epoch_id"], latest["epoch_hash"], utcnow(), args.repository_id, not args.dev)
         body = Path(args.paper).read_bytes()
         kwargs = {}
-        if epoch["protocol"] in (PROTOCOL_V2, PROTOCOL_V3):
+        if epoch["protocol"] in (PROTOCOL_V2, *PR_PROTOCOLS):
             from . import assets, taxonomy
-            entries, _ = assets.collect_local(body, args.assets_dir or Path(args.paper).parent)
+            limits = {"max_image": 8_000_000, "max_total": 8_000_000} if epoch["protocol"] == PROTOCOL_V4 else {}
+            entries, _ = assets.collect_local(body, args.assets_dir or Path(args.paper).parent, **limits)
             kwargs = {"entries": entries, "asset_source": read_json(args.asset_source) if args.asset_source else None,
                       "catalog": taxonomy.load(args.root, epoch["taxonomy_hash"])}
         if command == "revise":
             from .works import path
-            require(epoch["protocol"] in (PROTOCOL_V2, PROTOCOL_V3), "protocol_version", "Revisions require a versioned challenge.")
+            require(epoch["protocol"] in (PROTOCOL_V2, *PR_PROTOCOLS), "protocol_version", "Revisions require a versioned challenge.")
             work = read_json(path(args.root, args.work_id))
             require(work["owner_id"] == args.user_id and work["repository_id"] == args.repository_id,
                     "revision_unauthorized", "The original submitter must prepare this revision.")
@@ -264,10 +279,10 @@ def execute(args):
                     "Leave 8192 bytes for certificates before computing Proof of Work; use shorter metadata.")
         write_json(args.out, result)
         report = {"content_hash": result["content_hash"], "paper_sha256": result["paper_sha256"]}
-        if epoch["protocol"] == PROTOCOL_V3:
+        if epoch["protocol"] in PR_PROTOCOLS:
             from .protocol_v3 import material_size
             report["material_bytes"] = str(material_size(result))
-            report["material_limit"] = "1000000"
+            report["material_limit"] = str(pr_protocol(epoch["protocol"]).MAX_MATERIAL)
         _emit(report)
     elif command in ("pow", "verify-pow", "questions", "pack", "verify"):
         package = read_json(args.package, 60_000)
@@ -278,7 +293,7 @@ def execute(args):
             epoch = load_epoch(args.root, package["epoch_id"], package["epoch_hash"], context.received_at,
                                package["repository_id"], not args.dev)
             require(epoch["protocol"] == package["protocol"], "protocol_version", "Package and epoch protocols differ.")
-            if package["protocol"] in (PROTOCOL_V2, PROTOCOL_V3):
+            if package["protocol"] in (PROTOCOL_V2, *PR_PROTOCOLS):
                 from . import taxonomy
                 require(package["metadata"]["taxonomy_hash"] == epoch["taxonomy_hash"], "taxonomy_mismatch", "Use the epoch's taxonomy.")
                 taxonomy.validate_categories(package["metadata"], taxonomy.load(args.root, epoch["taxonomy_hash"]))
@@ -302,14 +317,14 @@ def execute(args):
             if command == "pack":
                 package["answers"] = read_json(args.answers)
                 if args.homepages:
-                    require(package["protocol"] == PROTOCOL_V3, "protocol_version", "Homepage display fields require v3.")
+                    require(package["protocol"] in PR_PROTOCOLS, "protocol_version", "Homepage display fields require a PR protocol.")
                     package["author_homepages"] = read_json(args.homepages)
             result = verify(package, args.root, context, not args.dev,
                             supplied_body=Path(args.paper).read_bytes() if args.paper else None,
                             supplied_assets=_local_assets(args, package))
             if command == "pack":
                 write_json(args.out, package)
-                if package["protocol"] == PROTOCOL_V3:
+                if package["protocol"] in PR_PROTOCOLS:
                     from .protocol_v3 import metadata_file
                     write_json(Path(args.out).parent / "metadata.json", metadata_file(package))
             _emit({"valid": True, "paper_id": result["paper_id"], "results": result["proof"]["results"]})
@@ -332,7 +347,7 @@ def execute(args):
         from .protocol_v3 import metadata_file
         package = read_json(args.package, 60_000)
         epoch = read_json(epoch_path(args.root, package["epoch_id"]))
-        require(package["protocol"] == PROTOCOL_V3 and epoch["profile"] == "development", "development_required", "This demo only accepts development v3 proofs.")
+        require(package["protocol"] in PR_PROTOCOLS and epoch["profile"] == "development", "development_required", "This demo only accepts development PR proofs.")
         repository = "local/demo"
         pr = {"id": args.pr, "number": args.pr, "user": {"id": package["submitter_id"]}, "title": "[preprint] development",
               "state": "open", "draft": False, "base": {"sha": "a" * 40, "repo": {"id": package["repository_id"], "full_name": repository}},
@@ -345,8 +360,7 @@ def execute(args):
     elif command == "build":
         _emit(build(args.root, args.out, args.base_path, social=read_json(args.social, 4_000_000) if args.social else None))
     elif command == "submit":
-        token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
-        require(token, "auth_required", "Set the participant's GH_TOKEN locally; tokens are never part of submissions.")
+        token = participant_token(required=True)
         github = GitHub(token)
         package = read_json(args.package, 60_000)
         require(args.paper, "body_unavailable", "PR submission requires --paper and its local image files.")
@@ -355,7 +369,7 @@ def execute(args):
                         _local_assets(args, package) or {}, args.checkpoint or str(Path(args.package).with_suffix(".pr-checkpoint.json")), args.draft)
         _emit({"pull_request_number": str(result["number"]), "pull_request_id": str(result["id"]), "url": result["html_url"]})
     elif command == "status":
-        github = GitHub(os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN"))
+        github = GitHub(participant_token())
         require(args.pr > 0 and 0 <= args.wait_seconds <= 3600, "input_limit", "Invalid PR number or wait limit.")
         from .automation import parse_comment
         deadline, delay = time.monotonic() + args.wait_seconds, 2

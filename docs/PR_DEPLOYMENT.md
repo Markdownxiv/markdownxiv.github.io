@@ -1,8 +1,9 @@
-# PR-only deployment and cutover
+# V4 Deployment and Project Feedback
 
-The v3 implementation replaces production Issue admission with ready PR admission.
-This document describes the rollout; it does not establish that remote settings,
-workflows or Pages have already been changed.
+V4 keeps PR-only admission, targets 30 seconds of expected Proof of Work, and
+allows 8,000,000 bytes of material per version. Project Issues are open for feedback
+and do not participate in admission. This document describes the deployment procedure;
+actual results are recorded separately in the version's validation record.
 
 ## Trusted workflows
 
@@ -32,32 +33,37 @@ python -m unittest discover -s tests -v
 python examples/local_demo.py --out .demo
 python examples/local_demo_v2.py --out .demo-v2
 python examples/local_demo_v3.py --out .demo-v3
+python examples/local_demo_v4.py --out .demo-v4
 preprints build --out _site
 ```
 
 Development state stays in separate output directories. The production root
-contains only measured calibration and production epochs. Original v1/v2 fixtures
+contains only measured calibration and production epochs. Original v1/v2/v3 fixtures
 retain immutable vectors and do not authorize new production PR admission.
 
 ## Coordinated cutover
 
-1. Publish the reviewed trusted implementation, owner-authorized test-archive reset
-   and configuration through an explicitly authorized repository update.
-2. Dispatch maintenance on the default branch. A v3 epoch uses the retained valid
-   measurement and trusted taxonomy. It remains unadmissible until Pages success
-   is recorded in the production registry.
-3. Check the new homepage, v3 challenge, subject pages and machine endpoints by HTTP.
+1. Measure the reference implementation with `preprints calibrate --seconds 15
+   --expected-seconds 30 --conditions 'Actual measurement conditions' --out calibration.json`.
+   Initialize v4 with `init-production --protocol v4` and the real repository/site
+   arguments. Retain all old calibration and epoch files. These commands write only
+   local files; a new epoch has no admission authority before confirmed publication.
+2. Publish the reviewed code and new measured calibration through an authorized
+   repository update. Dispatch maintenance on the default branch. The new v4 epoch
+   must pin the measurement and trusted taxonomy and remain unadmissible until Pages
+   success is recorded in the registry. Preserve every existing paper and proof.
+3. Check the homepage, v4 challenge, Submit, About, llms.txt and subject pages by HTTP.
    Confirm PR workflow permissions and the shared lock before opening admission.
-4. Disable repository Issues once the PR replacement is deployed and ready, as
-   requested by the owner. Local tests and builds do not change GitHub settings.
-5. Exercise a ready PR from a public fork using production proofs, including an
-   account without archive write permission. Verify the closed PR receipt, abs/md
-   bytes and discussion with Issues disabled. Public test submissions require explicit
-   authorization; local mocks do not establish this live result.
+4. Reopen repository Issues for project feedback. Ensure workflows do not listen
+   to Issue events and maintenance only scans PRs. Legacy Issue admission helpers
+   live in tests, and production receipt synchronization selects only PR receipts.
+5. If separately authorized, exercise a ready PR from a public fork using production
+   proofs, including an account without archive write permission. Verify the closed
+   PR receipt, abs/md bytes and discussion. Local mocks do not establish this live result.
 
-The approved cleanup removes former test manuscripts, images, works, receipts and
-publication state from the current tree. Git history is not rewritten. Calibration,
-taxonomy, mathematical code and protocol vectors are retained.
+V4 performs no archive cleanup and does not rewrite Git history. Historical proof,
+calibration, taxonomy and mathematical family semantics remain unchanged. Reopening
+Issues does not re-enable the retired Issue submission channel.
 
 ## Failure handling
 

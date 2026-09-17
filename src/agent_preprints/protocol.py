@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import PROTOCOL, VERIFIER, PROTOCOL_V2, PROTOCOL_V3
+from . import PROTOCOL, VERIFIER, PROTOCOL_V2, PROTOCOL_V3, PROTOCOL_V4, PR_PROTOCOLS
 from .codec import (MAX_PACKAGE, canonical, content_hash, decimal, fields, hexhash,
                     loads, metadata, paper_bytes, sha, timestamp)
 from .epochs import load_epoch
@@ -12,6 +12,12 @@ PACKAGE_FIELDS = ["protocol", "repository_id", "submitter_id", "epoch_id", "epoc
                   "paper_sha256", "content_hash", "body", "nonce", "answers"]
 
 
+def pr_protocol(version):
+    from . import protocol_v3, protocol_v4
+    require(version in PR_PROTOCOLS, "protocol_version", "PR submissions require protocol v3 or v4.")
+    return protocol_v4 if version == PROTOCOL_V4 else protocol_v3
+
+
 @dataclass(frozen=True)
 class Context:
     repository_id: str
@@ -20,9 +26,8 @@ class Context:
 
 
 def validate_package(package):
-    if isinstance(package, dict) and package.get("protocol") == PROTOCOL_V3:
-        from .protocol_v3 import validate_package as validate_v3
-        return validate_v3(package)
+    if isinstance(package, dict) and package.get("protocol") in PR_PROTOCOLS:
+        return pr_protocol(package["protocol"]).validate_package(package)
     if isinstance(package, dict) and package.get("protocol") == PROTOCOL_V2:
         from .protocol_v2 import validate_package as validate_v2
         return validate_v2(package)
@@ -59,7 +64,7 @@ def verify_pow(package, root, context, production=True):
     epoch = load_epoch(root, package["epoch_id"], package["epoch_hash"], context.received_at,
                        context.repository_id, production)
     require(epoch["protocol"] == package["protocol"], "protocol_version", "Package and epoch protocol must match.")
-    if package["protocol"] in (PROTOCOL_V2, PROTOCOL_V3):
+    if package["protocol"] in (PROTOCOL_V2, *PR_PROTOCOLS):
         from . import taxonomy
         require(package["metadata"]["taxonomy_hash"] == epoch["taxonomy_hash"], "taxonomy_mismatch", "Use the epoch's taxonomy snapshot.")
         taxonomy.validate_categories(package["metadata"], taxonomy.load(root, epoch["taxonomy_hash"]))
@@ -71,9 +76,8 @@ def verify_pow(package, root, context, production=True):
 def verify(package, root, context, production=True, fetch_body=None, supplied_body=None, fetch_asset=None, supplied_assets=None):
     """Order matters: validate trusted epoch and cheap PoW BEFORE fetching any paper."""
     epoch, proof_hash = verify_pow(package, root, context, production)
-    if package["protocol"] == PROTOCOL_V3:
-        from .protocol_v3 import verify_after_pow
-        return verify_after_pow(package, epoch, proof_hash, fetch_body, supplied_body, fetch_asset, supplied_assets)
+    if package["protocol"] in PR_PROTOCOLS:
+        return pr_protocol(package["protocol"]).verify_after_pow(package, epoch, proof_hash, fetch_body, supplied_body, fetch_asset, supplied_assets)
     if package["protocol"] == PROTOCOL_V2:
         from .protocol_v2 import verify_after_pow
         return verify_after_pow(package, epoch, proof_hash, fetch_body, supplied_body, fetch_asset, supplied_assets)
@@ -100,9 +104,8 @@ def verify(package, root, context, production=True, fetch_body=None, supplied_bo
 
 
 def prepare(paper, meta, repository_id, submitter_id, epoch, epoch_hash, source=None, **kwargs):
-    if epoch["protocol"] == PROTOCOL_V3:
-        from .protocol_v3 import prepare as prepare_v3
-        return prepare_v3(paper, meta, repository_id, submitter_id, epoch, epoch_hash, source, **kwargs)
+    if epoch["protocol"] in PR_PROTOCOLS:
+        return pr_protocol(epoch["protocol"]).prepare(paper, meta, repository_id, submitter_id, epoch, epoch_hash, source, **kwargs)
     if epoch["protocol"] == PROTOCOL_V2:
         from .protocol_v2 import prepare as prepare_v2
         return prepare_v2(paper, meta, repository_id, submitter_id, epoch, epoch_hash, source, **kwargs)

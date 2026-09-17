@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from agent_preprints.archive import capture, receipt_path
-from agent_preprints.automation import ingest, opened_snapshot, validate_snapshot
+from legacy_automation import ingest, opened_snapshot, validate_snapshot
 from agent_preprints.codec import canonical, read_json
 from agent_preprints.errors import Rejection
 
