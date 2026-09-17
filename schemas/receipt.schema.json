@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:agent-preprints:receipt:v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "receipt_version": {
+      "const": "agent-preprints-receipt-v1"
+    },
+    "status": {
+      "enum": [
+        "accepted",
+        "duplicate",
+        "rejected",
+        "retryable"
+      ]
+    },
+    "paper_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "content_hash": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "error_code": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "message": {
+      "type": "string"
+    },
+    "archived": {
+      "type": "boolean"
+    },
+    "published": {
+      "type": "boolean"
+    },
+    "url": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "request_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "repository_id": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*$",
+      "maxLength": 20
+    },
+    "issue_id": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*$",
+      "maxLength": 20
+    },
+    "publication_status": {
+      "enum": [
+        "published",
+        "pending",
+        "not_archived"
+      ]
+    }
+  },
+  "required": [
+    "receipt_version",
+    "status",
+    "paper_id",
+    "content_hash",
+    "error_code",
+    "message",
+    "archived",
+    "published",
+    "url",
+    "request_sha256",
+    "repository_id",
+    "issue_id",
+    "publication_status"
+  ]
+}

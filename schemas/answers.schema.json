@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:agent-preprints:answers:v1",
+  "type": "array",
+  "items": {
+    "oneOf": [
+      {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "factors": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)$",
+              "maxLength": 80
+            },
+            "minItems": 1,
+            "maxItems": 256
+          }
+        },
+        "required": [
+          "factors"
+        ]
+      },
+      {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "permutation": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)$",
+              "maxLength": 80
+            },
+            "minItems": 2,
+            "maxItems": 128
+          },
+          "u": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(0|-?[1-9][0-9]*)$",
+              "maxLength": 13
+            },
+            "minItems": 2,
+            "maxItems": 128
+          },
+          "v": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(0|-?[1-9][0-9]*)$",
+              "maxLength": 13
+            },
+            "minItems": 2,
+            "maxItems": 128
+          }
+        },
+        "required": [
+          "permutation",
+          "u",
+          "v"
+        ]
+      }
+    ]
+  },
+  "minItems": 2,
+  "maxItems": 2
+}
