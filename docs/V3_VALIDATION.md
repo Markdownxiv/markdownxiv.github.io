@@ -1,8 +1,8 @@
 # V3 local implementation and validation
 
 Recorded on 2026-09-18 in Asia/Shanghai (2026-09-17 UTC), using Python 3.12.12 in an
-isolated temporary virtual environment. This record describes actual local checks;
-it does not claim that the reviewed code has been pushed or deployed.
+isolated temporary virtual environment. Local checks and the subsequently authorized
+production deployment are distinguished below.
 
 ## Completed checks
 
@@ -42,11 +42,28 @@ the former `form-action 'none'` CSP blocked the new search form; it was changed 
 
 Screenshots and browser data are temporary QA artifacts, not production manuscripts.
 
-## Remaining deployment checks
+## Authorized production deployment
 
-The local verification did not change the remote Issues setting, publish Pages,
-create public test PRs or run the new workflow on an actual non-collaborator's fork.
-Those results must not be inferred from API fixtures or local Git remotes. Follow
-[PR_DEPLOYMENT.md](PR_DEPLOYMENT.md) for the coordinated publication and Issues
-shutdown after the PR replacement is ready. Retain the empty production archive
-unless an actual submission or a clearly identified public test is authorized.
+The implementation was committed as `967159636168c68018290f6b181aaea922caa302`
+and pushed to the default branch with the owner's explicit authorization.
+[GitHub CI](https://github.com/kzoacn/Markdownxiv/actions/runs/35248893567)
+passed all 123 tests in 19.891 seconds on Python 3.12.14, all three actual offline
+CLI demos, the production-root site build and the public-source read integration probe.
+
+[The production maintenance/deployment](https://github.com/kzoacn/Markdownxiv/actions/runs/35249385258)
+completed validation, archive, build, Pages deployment and receipt finalization.
+The v3 epoch was published at `2026-09-17T16:54:25Z`; publication state records the
+successful deployment at `2026-09-17T16:54:57Z`. The actual production CLI downloaded
+and validated the Pages epoch, registry, taxonomy and original measured calibration.
+The public paper index contains zero papers, and an old test-paper route returns 404.
+
+Live Chromium checks against GitHub Pages passed at 1440x1000 and 390x844: all 149
+categories, subject filtering, empty category pages, header search, current Agent
+guide and v3 challenge, with no horizontal overflow or JavaScript errors. The deployed
+logo loaded. The repository Issues setting was then changed to `has_issues: false`
+as authorized, and the public PR listing API remained available with no open PRs.
+
+No public test PR or manuscript was created. Actual acceptance and discussion from a
+non-collaborator account remain untested live; API fixtures and local Git transactions
+do not establish that external outcome. Keep the production archive empty until a
+real submission or a separately authorized public test. See [PR_DEPLOYMENT.md](PR_DEPLOYMENT.md).
