@@ -107,7 +107,7 @@ if (results) {
         const row = node("li", undefined, "paper-row");
         const identity = node("div", undefined, "paper-id");
         const formats = node("span", undefined, "paper-formats");
-        formats.append(localLink("abs", paper.url), node("span", "|"), localLink("md", paper.markdown_url));
+        formats.append(localLink("abs", paper.url), node("span", "|"), localLink("md", paper.reader_url || paper.markdown_url));
         identity.append(node("span", paper.work_id + "v" + paper.version), formats);
         const title = node("h2");
         title.append(localLink(paper.title, paper.url));

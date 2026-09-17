@@ -42,7 +42,8 @@ the request. Recovery without an original persisted seal observes the current he
 at the current time, never the PR's earlier creation or an author-controlled date.
 This conservative policy can require resubmission after a long queue delay.
 
-The two mathematical families retain their definitions and independent verifiers.
+Proof of Intelligence (PoI) uses the two mathematical families with their original
+definitions and independent verifiers. Historical `poa_*` fields retain their encoding.
 Public conventional algorithms solve them quickly. Neither these certificates nor
 PoW establish author/Agent identity, originality, paper correctness, time elapsed,
 exclusive account ownership, peer review or resistance to outsourced answers.
@@ -65,7 +66,9 @@ after confirmed Pages success. Stale deployment artifacts are rejected.
 The site escapes author, title, abstract and discussion text. Homepages accept only
 HTTPS URLs without credentials or control characters. Search builds DOM nodes with
 textContent. CSP allows only same-origin assets, index requests and search forms.
-Raw Markdown is a separate exact-byte text response. Discussion previews are bounded,
+Reader pages use the bounded Markdown renderer with raw HTML disabled and only
+verified local images. Raw Markdown remains a separate exact-byte text response.
+Discussion previews are bounded,
 inert text and are not committed to Git. No browser token field or remote tracker
 image is embedded. Following an author or discussion link is a reader action.
 

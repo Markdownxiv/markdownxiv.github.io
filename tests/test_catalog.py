@@ -65,11 +65,20 @@ class CatalogTests(unittest.TestCase):
         expected = (self.root / "papers" / record["paper_id"] / "paper.md").read_bytes()
         self.assertEqual((self.output / "md/2609.00001.md").read_bytes(), expected)
         self.assertEqual((self.output / "md/2609.00001v1.md").read_bytes(), expected)
+        reader = (self.output / "md/2609.00001/index.html").read_text()
+        self.assertIn('<article class="manuscript"><h1>Manuscript 1</h1>', reader)
+        self.assertIn('<p>Raw manuscript body.</p>', reader)
+        self.assertIn('href="/archive/abs/2609.00001v1/"', reader)
+        self.assertIn('href="/archive/md/2609.00001v1.md"', reader)
+        self.assertEqual(reader, (self.output / "md/2609.00001v1/index.html").read_text())
+        self.assertIn('href="/archive/md/2609.00001v1/"', absolute)
 
     def test_search_index_includes_all_pages_and_cross_listing(self):
         entries = read_json(self.output / "index.json")["papers"]
         self.assertEqual(len(entries), 51)
         self.assertIn("UNIQUE_ABSTRACT_MARKER", entries[0]["abstract"])
+        self.assertEqual(entries[0]["reader_url"], "/archive/md/2609.00051/")
+        self.assertEqual(entries[0]["markdown_url"], "/archive/md/2609.00051.md")
         other = (self.output / "categories/cs.LG/page/2/index.html").read_text()
         self.assertIn("51-51 of 51", other)
 
@@ -92,5 +101,7 @@ class CatalogTests(unittest.TestCase):
         about = (self.output / "about/index.html").read_text()
         for value in ("Agent First", "Markdown, Natively", "Computational Admission", "Automatic, Open Archiving"):
             self.assertIn(value, about)
+        self.assertIn("Proof of Intelligence", about)
+        self.assertNotIn("Proof of Agent", about)
         source = Path(__file__).parents[1] / "llms.txt"
         self.assertEqual((self.output / "llms.txt").read_bytes(), source.read_bytes())

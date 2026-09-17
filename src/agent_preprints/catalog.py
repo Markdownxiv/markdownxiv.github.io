@@ -1,4 +1,4 @@
-"""Category-first catalog, static pagination, abstract pages and exact raw Markdown."""
+"""Category catalog, abstract and reader pages, plus exact raw Markdown downloads."""
 import html
 import math
 import shutil
@@ -30,7 +30,7 @@ def rows(entries, base):
     parts = []
     for entry in entries:
         wid, version = entry["work_id"], entry["version"]
-        links = '<a href="' + entry["url"] + '">abs</a> <span aria-hidden="true">|</span> <a href="' + entry["markdown_url"] + '">md</a>'
+        links = '<a href="' + entry["url"] + '">abs</a> <span aria-hidden="true">|</span> <a href="' + entry["reader_url"] + '">md</a>'
         categories = [entry["primary_category"], *entry["secondary_categories"]]
         subjects = ', '.join('<a href="' + base + 'categories/' + esc(code) + '/">' + esc(code) + '</a>' for code in categories if code)
         revised = ' <span class="muted">(revised ' + esc(entry["revised_at"][:10]) + ')</span>' if entry["version"] != "1" else ""
@@ -65,7 +65,7 @@ def pagination(total, current, route, base):
     return content + '</div>'
 
 
-def build_catalog(root, output, base, page, config, social=None):
+def build_catalog(root, output, base, page, render, config, social=None):
     registry = works.all_works(root)
     versions = {v["content_hash"]: (w, v) for w in registry for v in w["versions"]}
     snapshots = {w["work_id"]: w for w in (social or {}).get("works", [])}
@@ -92,7 +92,7 @@ def build_catalog(root, output, base, page, config, social=None):
         entries = proof["package"].get("assets", [])
         limits = {"max_image": 8_000_000, "max_total": 8_000_000} if proof["protocol"] == PROTOCOL_V4 else {}
         assets.validate_manifest(entries, **limits)
-        downloads = []
+        downloads, image_urls = [], {}
         for entry in entries:
             name = assets.filename(entry)
             source = root / "assets" / name
@@ -101,7 +101,21 @@ def build_catalog(root, output, base, page, config, social=None):
             (output / "media").mkdir(exist_ok=True)
             if not (output / "media" / name).exists():
                 shutil.copyfile(source, output / "media" / name)
-            downloads.append('<a href="' + base + 'media/' + name + '">' + esc(entry["path"]) + '</a>')
+            image_urls[entry["path"]] = base + 'media/' + name
+            downloads.append('<a href="' + image_urls[entry["path"]] + '">' + esc(entry["path"]) + '</a>')
+        version_id = wid + "v" + number
+        abstract_url = base + "abs/" + version_id + "/"
+        raw_url = base + "md/" + version_id + ".md"
+        discussion_url = "https://github.com/" + config["repository"] + ("/pull/" if work.get("discussion_kind") == "pull_request" else "/issues/") + work["root_issue_number"]
+        reader = ('<div class="reader"><div class="reader-heading"><p class="identifier">'
+                  + esc(work["work_id"] + 'v' + number) + ' / ' + esc(version["received_at"][:10]) + '</p>'
+                  + '<p class="authors">' + author_html(meta["authors"], links) + '</p>'
+                  + '<nav class="reader-links" aria-label="Manuscript views"><a href="' + abstract_url + '">Abstract</a>'
+                  + '<a href="' + raw_url + '">Raw Markdown</a><a href="' + esc(discussion_url, quote=True) + '">Discussion</a>'
+                  + '<a href="' + base + 'md/' + wid + '/">Latest version</a></nav></div>'
+                  + '<article class="manuscript">' + render(body.decode("utf-8"), image_urls) + '</article></div>')
+        for route in ["md/" + version_id] + (["md/" + wid] if latest else []):
+            page(route, meta["title"], reader)
         subjects = ', '.join('<a href="' + base + 'categories/' + esc(c) + '/">' + esc(c) + '</a>' for c in [meta.get("primary_category"), *meta.get("secondary_categories", [])] if c)
         history = '<ol class="versions">' + ''.join('<li><a href="' + base + 'abs/' + wid + 'v' + v["version"] + '/">v' + v["version"] + '</a> <time>' + esc(v["received_at"][:10]) + '</time><span>' + esc(v["change_summary"]) + '</span></li>' for v in reversed(work["versions"])) + '</ol>'
         content = ('<div class="breadcrumb"><a href="' + base + '">Subjects</a> / ' + subjects + '</div>'
@@ -112,7 +126,8 @@ def build_catalog(root, output, base, page, config, social=None):
                    + '<dt>This version</dt><dd>' + esc(version["received_at"][:10]) + '</dd><dt>License</dt><dd>' + esc(meta["license"]) + '</dd>'
                    + '<dt>Language</dt><dd>' + esc(meta.get("language", "Unknown")) + '</dd><dt>Declared AI</dt><dd>' + esc(ai_label(meta)) + '</dd></dl>'
                    + '<h2>Submission History</h2>' + history + '</section><aside class="paper-access"><h2>Access</h2><ul>'
-                   + '<li><a class="primary-link" href="' + base + 'md/' + wid + 'v' + number + '.md">Markdown</a></li>'
+                   + '<li><a class="primary-link" href="' + base + 'md/' + version_id + '/">Read Markdown</a></li>'
+                   + '<li><a href="' + raw_url + '">Raw Markdown</a></li>'
                    + '<li><a href="metadata.json">Metadata</a></li><li><a href="proof.json">Proof of Work &amp; certificates</a></li>'
                    + '<li><a href="' + base + 'abs/' + wid + '/">Latest version</a></li></ul>'
                    + ('<h3>Figures</h3><ul>' + ''.join('<li>' + d + '</li>' for d in downloads) + '</ul>' if downloads else '')
@@ -136,7 +151,8 @@ def build_catalog(root, output, base, page, config, social=None):
                                 "revised_at": version["received_at"], "primary_category": meta.get("primary_category"),
                                 "secondary_categories": meta.get("secondary_categories", []), "tags": meta.get("tags", []),
                                 "declared_ai": ai_label(meta), "url": base + "abs/" + wid[3:] + "/",
-                                "markdown_url": base + "md/" + wid[3:] + ".md"})
+                                "markdown_url": base + "md/" + wid[3:] + ".md",
+                                "reader_url": base + "md/" + wid[3:] + "/"})
         write_json(output / "works" / (wid[3:] + ".json"), work)
     catalog_entries.sort(key=lambda e: (e["received_at"], e["work_id"]), reverse=True)
     write_json(output / "index.json", {"papers": catalog_entries})

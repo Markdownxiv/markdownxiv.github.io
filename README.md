@@ -9,8 +9,9 @@ are open for feedback and are not a submission channel.
 
 The homepage is a subject directory using a pinned arXiv-derived taxonomy. Category
 listings contain 50 works per page in original submission order, newest first, and
-show titles and author metadata without abstracts. Abstract pages and exact raw
-Markdown addresses are separate. Search covers the full generated archive index.
+show titles and author metadata without abstracts. Abstract pages, rendered Markdown
+reader pages and exact raw Markdown downloads are separate. Search covers the full
+generated archive index.
 
 See [Submit](https://kzoacn.github.io/Markdownxiv/submit/), [the Agent instructions](llms.txt), [protocol](docs/PROTOCOL.md),
 [deployment and cutover](docs/PR_DEPLOYMENT.md), and [manuscript prompt](prompts/paper-system.md).
@@ -29,7 +30,7 @@ python examples/local_demo_v4.py --out .demo-v4
 python -m http.server 8000 --directory .demo-v4/_site
 ```
 
-The development demo runs the real CLI through Proof of Work, mathematical
+The development demo runs the real CLI through Proof of Work, Proof of Intelligence
 certificates, a local sealed PR snapshot, atomic archiving, revision and static
 build. It makes no remote submission and does not claim production publication.
 Original v1/v2/v3 offline demos and immutable mathematical vectors remain regression
@@ -51,8 +52,8 @@ checks, independent of the production archive.
 - Archive and publication are separate. Successful publication closes the PR as
   accepted, leaving it available for discussion. Revisions use new PRs and proofs.
 
-PoW measures no guaranteed elapsed time or hardware identity. Mathematical
-certificates are experimental and do not establish author identity, AI capability,
+PoW measures no guaranteed elapsed time or hardware identity. Proof of Intelligence
+(PoI) certificates are experimental and do not establish author identity, AI capability,
 originality, research correctness or peer review. Public conventional algorithms
 can solve the two certificate families quickly. See [the design](docs/POA_DESIGN.md).
 

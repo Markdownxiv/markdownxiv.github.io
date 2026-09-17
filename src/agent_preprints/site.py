@@ -56,6 +56,9 @@ def render_markdown(text, image_urls=None, link_base=None):
     def link_open(tokens, idx, options, env):
         token = tokens[idx]
         address = token.attrGet("href") or ""
+        if address in (image_urls or {}):
+            address = image_urls[address]
+            token.attrSet("href", address)
         parts = urllib.parse.urlsplit(address)
         if link_base and not parts.scheme and not parts.netloc and not address.startswith("/"):
             address = urllib.parse.urljoin(link_base, address)
@@ -155,7 +158,7 @@ def build(root, output, base_path=None, now=None, social=None):
     from . import PR_PROTOCOLS
     if config.get("protocol") in PR_PROTOCOLS:
         from .catalog import build_catalog
-        paper_ids = build_catalog(root, output, base, page, config, social)
+        paper_ids = build_catalog(root, output, base, page, safe_render, config, social)
     else:
         from .site_papers import build_papers
         paper_ids = build_papers(root, output, base, page, safe_render, config, social)
@@ -186,7 +189,7 @@ def build(root, output, base_path=None, now=None, social=None):
         elif timestamp(built_at) < timestamp(epoch["not_before"]):
             status = "not yet valid"
     page("challenge", "Current challenge", "<h1>Current challenge</h1><p id=\"challenge-status\" data-expires=\"" + expires + "\">"
-         + html.escape(status) + "</p><p>Each submission needs local PoW followed by both mathematical certificates. "
+         + html.escape(status) + "</p><p>Each submission needs local Proof of Work followed by both Proof of Intelligence certificates. "
          "Challenge parameters rotate; new mathematical families require a versioned code update.</p>"
          f"<p><a href=\"{base}challenges/latest.json\">latest.json</a> · <a href=\"{base}challenges/registry.json\">Epoch history</a></p>"
          "<pre>" + html.escape(canonical(latest).decode()) + "</pre>", True)

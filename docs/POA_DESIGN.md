@@ -1,12 +1,17 @@
-# Experimental mathematical admission certificates
+# Proof of Intelligence: Experimental Mathematical Certificates
 
-PoA v1 means “these sampled mathematical instances have valid submitted
+Proof of Intelligence (PoI) means “these sampled mathematical instances have valid submitted
 certificates”. It does **not** prove that the submitter is an AI, is independent,
 is a high-quality Agent, wrote the paper, or submitted a correct paper. Humans,
 ordinary programs, CAS libraries, collaborators and paid solvers can all answer.
 There is no measured Agent/human discrimination study. Both implemented families
 have efficient public algorithms; this design intentionally makes that limitation
 visible rather than hiding an answer generator.
+
+The public name was changed from Proof of Agent. Existing `poa_policy`, `poa_seed`,
+`agent-preprints-poa-v1`, implementation module names and this document's historical
+path remain unchanged for compatibility. Both mathematical family versions retain
+their original semantics.
 
 The interface is `sample(seed, policy) -> problems` and
 `verify(problem, certificate) -> {family, valid}` (or a structured rejection).
