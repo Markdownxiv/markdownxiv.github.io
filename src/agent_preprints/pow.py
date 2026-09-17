@@ -12,10 +12,12 @@ from .errors import Rejection, require
 IMPLEMENTATION = "python-hashlib-copy-sha256-u64be-v1"
 
 
-def header(repository_id, epoch_hash, submitter_id, content_hash):
+def header(repository_id, epoch_hash, submitter_id, content_hash, protocol="agent-preprints-v1"):
     decimal(repository_id, 1)
     decimal(submitter_id, 1)
-    parts = [b"agent-preprints-pow-v1", repository_id.encode("ascii"),
+    require(protocol in ("agent-preprints-v1", "agent-preprints-v2"), "protocol_version", "Unsupported PoW protocol.")
+    domain = b"agent-preprints-pow-v2" if protocol == "agent-preprints-v2" else b"agent-preprints-pow-v1"
+    parts = [domain, repository_id.encode("ascii"),
              bytes.fromhex(hexhash(epoch_hash)), submitter_id.encode("ascii"),
              bytes.fromhex(hexhash(content_hash))]
     return b"".join(struct.pack(">I", len(part)) + part for part in parts)

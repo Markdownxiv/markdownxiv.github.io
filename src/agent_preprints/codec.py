@@ -142,9 +142,9 @@ def metadata(value):
     require(len(set(tags)) == len(tags), "invalid_metadata", "Duplicate tag.")
 
 
-def paper_bytes(data):
-    require(isinstance(data, bytes) and 1 <= len(data) <= MAX_PAPER,
-            "paper_limit", "Paper must contain 1–262144 UTF-8 bytes.")
+def paper_bytes(data, limit=MAX_PAPER):
+    require(isinstance(data, bytes) and 1 <= len(data) <= limit,
+            "paper_limit", f"Paper must contain 1–{limit} UTF-8 bytes.")
     try:
         decoded = data.decode("utf-8")
     except UnicodeError as exc:

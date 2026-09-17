@@ -123,3 +123,52 @@ class GitTests(unittest.TestCase):
         with self.assertRaises(Rejection) as caught:
             GitTransaction(checkout, "main").run(mutation)
         self.assertEqual(caught.exception.code, "unsafe_write")
+
+    def v2_package(self, body=b"# A new v2 manuscript\n", intent=None):
+        from agent_preprints import PROTOCOL_V2, taxonomy
+        from agent_preprints.epochs import rotate, epoch_path
+        from agent_preprints.protocol import prepare
+        from support import NOW, META
+        epoch = rotate(self.seed, NOW, True, protocol=PROTOCOL_V2)
+        meta = {**META, "primary_category": "math.CO", "ai_disclosure": "unknown", "agents": []}
+        package = prepare(body, meta, "1", "2", epoch, sha(epoch_path(self.seed, epoch["epoch_id"]).read_bytes()),
+                          submission_intent=intent, catalog=taxonomy.load(self.seed, epoch["taxonomy_hash"]))
+        return complete(package, epoch)
+
+    def test_v2_two_git_writers_allocate_distinct_short_ids(self):
+        one = self.v2_package()
+        two = self.v2_package(b"# Another v2 manuscript\n")
+        git(self.seed, "add", ".")
+        git(self.seed, "commit", "-m", "trusted v2 development epoch")
+        git(self.seed, "push", "origin", "main")
+        clones = [self.clone("v2-one"), self.clone("v2-two")]
+        packages = [one, two]
+        def write(index):
+            return GitTransaction(clones[index], "main").run(lambda tree: process(tree, snapshot(packages[index], str(70 + index)), False))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            result = list(pool.map(write, range(2)))
+        self.assertEqual({r[1]["work_id"] for r in result}, {"mx:2609.00001", "mx:2609.00002"})
+        names = git(self.remote, "ls-tree", "-r", "--name-only", "main").splitlines()
+        self.assertEqual(sum(p.endswith("/paper.md") for p in names), 2)
+
+    def test_v2_git_retry_rechecks_parent_after_competing_revision(self):
+        original = self.v2_package()
+        first = process(self.seed, snapshot(original, "70"), False)
+        intent = {"kind": "revision", "work_id": first["work_id"], "parent_hash": first["paper_id"], "change_summary": "Change text."}
+        one = self.v2_package(b"# Winning revision\n", intent)
+        two = self.v2_package(b"# Stale revision\n", intent)
+        git(self.seed, "add", ".")
+        git(self.seed, "commit", "-m", "v2 work and revision challenge")
+        git(self.seed, "push", "origin", "main")
+        winner, stale = self.clone("winner"), self.clone("stale")
+        def race(attempt):
+            if attempt == 0:
+                GitTransaction(winner, "main").run(lambda tree: process(tree, snapshot(one, "71"), False))
+        _, result = GitTransaction(stale, "main").run(lambda tree: process(tree, snapshot(two, "72"), False), race)
+        self.assertEqual(result["error_code"], "revision_conflict")
+        latest = self.clone("result")
+        from agent_preprints.works import all_works
+        versions = all_works(latest)[0]["versions"]
+        self.assertEqual(len(versions), 2)
+        self.assertEqual(versions[-1]["content_hash"], one["content_hash"])
+        self.assertFalse((latest / "papers" / two["content_hash"]).exists())

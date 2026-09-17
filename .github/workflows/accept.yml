@@ -35,7 +35,9 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: validated-${{ github.run_attempt }}
-          path: .work/validated.json
+          path: |
+            .work/validated.json
+            .work/cache/
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
@@ -80,6 +82,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      issues: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -91,7 +94,10 @@ jobs:
       - run: |
           python -m pip install --require-hashes -r requirements.lock
           python -m pip install --no-deps --no-build-isolation -e .
-          preprints build --out _site
+          python -m agent_preprints.social --out .work/social.json
+          preprints build --out _site --social .work/social.json
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: manifest-${{ github.run_attempt }}

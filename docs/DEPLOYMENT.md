@@ -1,5 +1,60 @@
 # Deployment and recovery
 
+## V2 upgrade
+
+Existing v1 papers, proofs, metadata and epochs remain immutable. Run locally:
+
+```bash
+python -m unittest discover -s tests -v
+python examples/local_demo.py --out .demo
+python examples/local_demo_v2.py --out .demo-v2
+preprints migrate --root .
+preprints build --out _site
+```
+
+Migration only creates `works/` aliases ordered by original receipt time/hash.
+The first two works become `mx:2609.00001` and `mx:2609.00002`. Add
+`"protocol":"agent-preprints-v2"` to production.json, retaining the calibration and
+other fields, then run `preprints rotate`. New `init-production` installations select
+v2 automatically. `v2-YYYY-MM-DD` coexists with the same day's old v1 epoch. Commit
+the trusted taxonomy, new registry, prompts and schemas along with the implementation.
+This upgrade needs no remote permission, visibility or environment setting changes.
+
+After authorized commit/push, deploy through the existing maintenance workflow:
+
+```bash
+gh workflow run maintain.yml --ref main
+gh run list --workflow maintain.yml --limit 3
+preprints challenge --site https://kzoacn.github.io/Markdownxiv/ --root .work/live-v2
+preprints work --site https://kzoacn.github.io/Markdownxiv/ \
+  --root .work/live-v2 --work-id mx:2609.00002
+```
+
+Wait for actual deployment and receipt finalization before using the new epoch.
+Both business workflows retain their shared serialization and split permissions.
+Read-only validation uploads `.work/validated.json` and opaque files in
+`.work/cache/`; the writer rechecks hashes, proofs and fresh parent state. Build
+jobs read reactions/comments with Issues read permission, and put comment bodies
+only in deployment artifacts, never Git. Readers write natively on GitHub as
+themselves. No OAuth app, database, paid API or browser token is introduced.
+
+Measure local capacity with:
+
+```bash
+python examples/measure_resources.py --out .work/resources.json
+```
+
+The synthetic 12 MiB and 20 MP tests are local, not GitHub network/runner benchmarks.
+Downloads retain absolute deadlines. Maintenance processes at most five candidates
+and 64 MiB per batch; social polling covers at most 20 works per hourly window.
+Sites above 900 MB remain pending rather than deleting history. Monitor normal
+GitHub repository/Pages quotas as usage grows.
+
+Submitters upload source files to a public repository they control and pin a full
+commit. Do not grant platform write access or require `gh --attach` (that path needs
+push access). Do not rewrite sealed old Issue bodies to migrate their presentation.
+V2 creates new readable envelopes and updates bot receipt cards idempotently.
+
 The site was first deployed on 2026-09-17 after the maintainer authorized publication,
 logged in, and selected GitHub Actions as the Pages source. See the
 [successful deployment](https://github.com/kzoacn/Markdownxiv/actions/runs/35201761005)

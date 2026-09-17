@@ -8,6 +8,8 @@ on:
       - 'examples/**'
       - 'site/**'
       - 'schemas/**'
+      - 'taxonomy/**'
+      - 'prompts/**'
       - 'pyproject.toml'
       - 'requirements.lock'
       - '.github/workflows/**'
@@ -29,4 +31,5 @@ jobs:
           python -m pip install --no-deps --no-build-isolation -e .
           python -m unittest discover -s tests -v
           python examples/local_demo.py --out .demo
+          python examples/local_demo_v2.py --out .demo-v2
           preprints build --out _site

@@ -56,11 +56,13 @@ class GitTransaction:
                 self.git(self.checkout, "worktree", "add", "--detach", str(worktree), head)
                 try:
                     result = mutation(worktree)
-                    self.git(worktree, "add", "--all", "--", "papers", "receipts", "challenges", "state")
+                    paths = [p for p in ("papers", "receipts", "challenges", "state", "works", "assets") if (worktree / p).exists()]
+                    self.git(worktree, "add", "--all", "--", *paths)
                     staged = self.git(worktree, "diff", "--cached", "--name-only", "-z").stdout.split("\0")
                     allowed = re.compile(r"(?:papers/[0-9a-f]{64}/(?:paper\.md|metadata\.json|proof\.json)|"
                                          r"receipts/[0-9]+-[0-9]+\.json|challenges/(?:latest\.json|registry\.json|"
-                                         r"epochs/\d{4}-\d{2}-\d{2}\.json)|state/(?:scan|published)\.json)\Z")
+                                         r"epochs/(?:v2-)?\d{4}-\d{2}-\d{2}\.json)|state/(?:scan|published)\.json|"
+                                         r"works/[0-9]{4}\.[0-9]{5,10}\.json|assets/[0-9a-f]{64}\.(?:png|jpg|webp))\Z")
                     require(all(not name or allowed.fullmatch(name) for name in staged),
                             "unsafe_write", "Transaction attempted to modify a non-data path.")
                     if any(staged):
@@ -88,7 +90,7 @@ def opened_snapshot(event, repository, repository_id):
     return capture(event["issue"], repository_id, "opened")
 
 
-def validate_snapshot(root, snapshot, github):
+def validate_snapshot(root, snapshot, github, cache=None):
     record_path = receipt_path(root, snapshot)
     if record_path.exists():
         record = read_json(record_path)
@@ -96,14 +98,31 @@ def validate_snapshot(root, snapshot, github):
             return {"snapshot": snapshot, "body_base64": None, "result": public_receipt(record)}
         snapshot = record["snapshot"]
     try:
-        result = evaluate(snapshot, root, production=True, fetch_body=github.fetch_paper)
+        from .github import wall_timeout
+        with wall_timeout(120):
+            result = evaluate(snapshot, root, production=True,
+                              fetch_body=getattr(github, "fetch_paper_v2", github.fetch_paper),
+                              fetch_asset=getattr(github, "fetch_asset", None))
+        if cache is not None:
+            from .assets import filename
+            cache = Path(cache)
+            cache.mkdir(parents=True, exist_ok=True)
+            body_name = sha(result["body"]) + ".md"
+            (cache / body_name).write_bytes(result["body"])
+            asset_files = []
+            for entry in result["proof"]["package"].get("assets", []):
+                name = filename(entry)
+                (cache / name).write_bytes(result["assets"][entry["path"]])
+                asset_files.append({"path": entry["path"], "file": name})
+            return {"snapshot": snapshot, "body_file": body_name, "asset_files": asset_files,
+                    "result": {"valid": True, "paper_id": result["paper_id"]}}
         return {"snapshot": snapshot, "body_base64": base64.b64encode(result["body"]).decode("ascii"),
                 "result": {"valid": True, "paper_id": result["paper_id"]}}
     except Rejection as exc:
         return {"snapshot": snapshot, "body_base64": None, "result": exc.as_dict()}
 
 
-def collect(root, github, repository, repository_id, now=None, batch=20):
+def collect(root, github, repository, repository_id, now=None, batch=5):
     """Bounded cyclic pagination, with a persisted cursor and retry backoff.
 
     Full pages skipped by a deletion are revisited in the next sweep. The current page
@@ -143,14 +162,37 @@ def collect(root, github, repository, repository_id, now=None, batch=20):
     return {"snapshots": selected, "next_page": str(page), "observed_at": now}
 
 
-def ingest(root, validated, github, repository_id):
+def ingest(root, validated, github, repository_id, cache=None):
     records = []
+    total = 0
     for item in validated:
-        fields(item, ["snapshot", "body_base64", "result"])
+        binary = "body_file" in item
+        fields(item, ["snapshot", "result"] + (["body_file", "asset_files"] if binary else ["body_base64"]))
         snapshot = item["snapshot"]
         require(snapshot["repository_id"] == repository_id, "event_mismatch", "Artifact repository mismatch.")
-        body = None
-        if item["body_base64"] is not None:
+        body, image_data = None, None
+        if binary:
+            from .assets import MAX_PAPER, MAX_IMAGE, logical_path
+            require(cache is not None and isinstance(item["asset_files"], list) and len(item["asset_files"]) <= 20,
+                    "artifact_limit", "Invalid binary artifact cache.")
+            def read_cache(name, cap):
+                nonlocal total
+                require(isinstance(name, str) and re.fullmatch(r"[0-9a-f]{64}\.(?:md|png|jpg|webp)", name),
+                        "artifact_limit", "Unsafe cache filename.")
+                path = Path(cache) / name
+                require(path.is_file() and not path.is_symlink() and path.stat().st_size <= cap, "artifact_limit", "Missing or oversized cache file.")
+                raw = path.read_bytes()
+                total += len(raw)
+                require(total <= 64 * 1024 * 1024 and sha(raw) == name.split(".")[0], "artifact_limit", "Cache digest or batch budget mismatch.")
+                return raw
+            body = read_cache(item["body_file"], MAX_PAPER)
+            image_data = {}
+            for asset in item["asset_files"]:
+                fields(asset, ["path", "file"])
+                logical_path(asset["path"])
+                require(asset["path"] not in image_data, "artifact_limit", "Duplicate cached image path.")
+                image_data[asset["path"]] = read_cache(asset["file"], MAX_IMAGE)
+        elif item["body_base64"] is not None:
             require(isinstance(item["body_base64"], str) and len(item["body_base64"]) <= 350_000,
                     "artifact_limit", "Invalid paper cache.")
             try:
@@ -159,23 +201,27 @@ def ingest(root, validated, github, repository_id):
                 raise Rejection("artifact_limit", "Malformed paper cache.") from exc
         # No acceptance bit from the read-only artifact is trusted. Re-validate after
         # obtaining fresh state, including on every non-fast-forward retry.
-        records.append(process(root, snapshot, True, github.fetch_paper, body))
+        from .github import wall_timeout
+        with wall_timeout(120):
+            records.append(process(root, snapshot, True, getattr(github, "fetch_paper_v2", github.fetch_paper), body,
+                                   getattr(github, "fetch_asset", None), image_data))
     return records
 
 
 COMMENT_RE = re.compile(r"<!-- agent-preprints:[0-9]+:[0-9]+ -->\n```json\n(.*)\n```\Z", re.S)
+CARD_RE = re.compile(r"<!-- agent-preprints:[0-9]+:[0-9]+ -->\n.*\n<details>\n<summary>Machine-readable receipt</summary>\n\n```json\n([^\n]+)\n```\n</details>\Z", re.S)
 
 
 def parse_comment(comment):
     user = comment.get("user", {})
     if user.get("login") != "github-actions[bot]" or user.get("type") != "Bot":
         return None
-    match = COMMENT_RE.fullmatch(comment.get("body", ""))
+    match = COMMENT_RE.fullmatch(comment.get("body", "")) or CARD_RE.fullmatch(comment.get("body", ""))
     if not match:
         return None
     try:
         value = loads(match.group(1))
-        if value.get("receipt_version") == "agent-preprints-receipt-v1":
+        if value.get("receipt_version") in ("agent-preprints-receipt-v1", "agent-preprints-receipt-v2"):
             return value
     except Rejection:
         pass
@@ -185,7 +231,8 @@ def parse_comment(comment):
 def upsert_comment(github, repository, record):
     snapshot = record["snapshot"]
     marker = "<!-- agent-preprints:" + snapshot["repository_id"] + ":" + snapshot["issue_id"] + " -->"
-    body = marker + "\n```json\n" + canonical(public_receipt(record)).decode() + "\n```"
+    from .envelope import receipt_body
+    body = receipt_body(record)
     prefix = "/repos/" + repository_name(repository) + "/issues"
     comment_id = record["comment_id"]
     if comment_id is not None:
@@ -218,7 +265,17 @@ def sync_receipts(root, github, repository, limit=20):
     count = 0
     for path in sorted((Path(root) / "receipts").glob("*.json")):
         record = read_json(path)
-        digest = sha(canonical(public_receipt(record)))
+        if record["archived"] and not record.get("work_id"):
+            from .works import locate
+            work, version = locate(root, record["paper_id"])
+            if work:
+                config = read_json(Path(root) / "config/production.json")
+                # Human-facing aliases only: preserve the original v1 receipt JSON.
+                record.update({"display_work_id": work["work_id"], "display_version": version["version"],
+                               "display_work_url": config["site_url"].rstrip("/") + "/p/" + work["work_id"][3:] + "/",
+                               "display_discussion_url": "https://github.com/" + repository + "/issues/" + work["root_issue_number"]})
+        from .envelope import receipt_body
+        digest = sha(receipt_body(record).encode())
         if digest == record["comment_digest"]:
             continue
         if count >= limit:
@@ -263,11 +320,11 @@ def main():
             require(os.environ.get("GITHUB_REF") == "refs/heads/" + branch or args.command == "finalize",
                     "event_mismatch", "Maintenance must run on the default branch.")
         if args.command == "validate-event":
-            write_json(args.artifact, {"validated": [validate_snapshot(args.root, snapshot, github)]})
+            write_json(args.artifact, {"validated": [validate_snapshot(args.root, snapshot, github, Path(args.artifact).parent / "cache")]})
             return 0
         if args.command == "collect":
             plan = collect(args.root, github, repository, repository_id)
-            write_json(args.artifact, {"validated": [validate_snapshot(args.root, s, github) for s in plan["snapshots"]],
+            write_json(args.artifact, {"validated": [validate_snapshot(args.root, s, github, Path(args.artifact).parent / "cache") for s in plan["snapshots"]],
                                        "next_page": plan["next_page"]})
             return 0
         data = read_json(args.artifact, 12_000_000) if args.command in ("ingest-event", "maintain") else None
@@ -283,13 +340,18 @@ def main():
                 require(candidate == sealed["snapshot"], "event_mismatch", "Artifact snapshot differs from event and sealed record.")
         if args.command == "maintain":
             fields(data, ["validated", "next_page"])
-            require(isinstance(data["validated"], list) and len(data["validated"]) <= 20, "artifact_limit", "Maintenance batch limit exceeded.")
+            require(isinstance(data["validated"], list) and len(data["validated"]) <= 5, "artifact_limit", "Maintenance batch limit exceeded.")
             decimal(data["next_page"], 1, 1_000_000)
         def mutate(root):
+            from .archive import lock
+            from .works import migrate, recover
+            with lock(root):
+                recover(root)
+                migrate(root)
             if args.command == "maintain":
                 rotate(root)
             if data is not None:
-                records = ingest(root, data["validated"], github, repository_id)
+                records = ingest(root, data["validated"], github, repository_id, Path(args.artifact).parent / "cache")
                 if args.command == "maintain":
                     atomic_json(root / "state" / "scan.json", {"page": data["next_page"]})
                 return [public_receipt(r) for r in records]

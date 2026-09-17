@@ -34,10 +34,12 @@ class SiteTests(unittest.TestCase):
         build(self.root, out, "/repo-name/", NOW)
         paper = out / "papers" / record["paper_id"]
         self.assertIn("<math ", (paper / "index.html").read_text())
-        self.assertIn("未经同行评审", (paper / "index.html").read_text())
+        self.assertIn("Not peer reviewed", (paper / "index.html").read_text())
         self.assertEqual((paper / "paper.md").read_bytes(), self.package["body"]["text"].encode())
         self.assertTrue(read_json(paper / "proof.json")["experimental"])
-        self.assertEqual(read_json(out / "index.json")["papers"][0]["url"], "/repo-name/papers/" + record["paper_id"] + "/")
+        entry = read_json(out / "index.json")["papers"][0]
+        self.assertEqual(entry["legacy_url"], "/repo-name/papers/" + record["paper_id"] + "/")
+        self.assertEqual(entry["url"], "/repo-name/p/2609.00001/")
 
     def test_xss_templates_and_external_images_are_data(self):
         malicious = '''<script>alert(1)</script>
@@ -76,3 +78,13 @@ $\\href{javascript:alert(4)}{x}$
         for output in (self.root, self.root / "papers", self.root / "site", self.root / "challenges/nested"):
             with self.assertRaises(Rejection):
                 build(self.root, output, "/", NOW)
+
+    def test_older_publication_cannot_replace_newer_social_build(self):
+        from agent_preprints.archive import mark_deployed
+        manifest = build(self.root, self.root / "_site", "/", NOW)
+        newer = {**manifest, "built_at": "2026-09-17T12:01:00Z"}
+        mark_deployed(self.root, newer, "https://test.github.io/archive/")
+        with self.assertRaises(Rejection):
+            guard(self.root, manifest)
+        with self.assertRaises(Rejection):
+            mark_deployed(self.root, manifest, "https://test.github.io/archive/")

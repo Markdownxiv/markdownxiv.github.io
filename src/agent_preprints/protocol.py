@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import PROTOCOL, VERIFIER
+from . import PROTOCOL, VERIFIER, PROTOCOL_V2
 from .codec import (MAX_PACKAGE, canonical, content_hash, decimal, fields, hexhash,
                     loads, metadata, paper_bytes, sha, timestamp)
 from .epochs import load_epoch
@@ -20,6 +20,9 @@ class Context:
 
 
 def validate_package(package):
+    if isinstance(package, dict) and package.get("protocol") == PROTOCOL_V2:
+        from .protocol_v2 import validate_package as validate_v2
+        return validate_v2(package)
     require(len(canonical(package)) <= MAX_PACKAGE, "input_limit", "Submission package exceeds 60000 bytes.")
     fields(package, PACKAGE_FIELDS)
     require(package["protocol"] == PROTOCOL, "protocol_version", "Unsupported submission protocol.")
@@ -52,14 +55,22 @@ def verify_pow(package, root, context, production=True):
             "identity_mismatch", "Submission is bound to another GitHub user ID.")
     epoch = load_epoch(root, package["epoch_id"], package["epoch_hash"], context.received_at,
                        context.repository_id, production)
-    head = pow.header(context.repository_id, package["epoch_hash"], context.submitter_id, package["content_hash"])
+    require(epoch["protocol"] == package["protocol"], "protocol_version", "Package and epoch protocol must match.")
+    if package["protocol"] == PROTOCOL_V2:
+        from . import taxonomy
+        require(package["metadata"]["taxonomy_hash"] == epoch["taxonomy_hash"], "taxonomy_mismatch", "Use the epoch's taxonomy snapshot.")
+        taxonomy.validate_categories(package["metadata"], taxonomy.load(root, epoch["taxonomy_hash"]))
+    head = pow.header(context.repository_id, package["epoch_hash"], context.submitter_id, package["content_hash"], package["protocol"])
     proof_hash = pow.verify(head, package["nonce"], epoch["target"])
     return epoch, proof_hash
 
 
-def verify(package, root, context, production=True, fetch_body=None, supplied_body=None):
+def verify(package, root, context, production=True, fetch_body=None, supplied_body=None, fetch_asset=None, supplied_assets=None):
     """Order matters: validate trusted epoch and cheap PoW BEFORE fetching any paper."""
     epoch, proof_hash = verify_pow(package, root, context, production)
+    if package["protocol"] == PROTOCOL_V2:
+        from .protocol_v2 import verify_after_pow
+        return verify_after_pow(package, epoch, proof_hash, fetch_body, supplied_body, fetch_asset, supplied_assets)
     if supplied_body is not None:
         body = supplied_body
         if package["body"]["kind"] == "inline":
@@ -82,7 +93,10 @@ def verify(package, root, context, production=True, fetch_body=None, supplied_bo
                       "package": package}}
 
 
-def prepare(paper, meta, repository_id, submitter_id, epoch, epoch_hash, source=None):
+def prepare(paper, meta, repository_id, submitter_id, epoch, epoch_hash, source=None, **kwargs):
+    if epoch["protocol"] == PROTOCOL_V2:
+        from .protocol_v2 import prepare as prepare_v2
+        return prepare_v2(paper, meta, repository_id, submitter_id, epoch, epoch_hash, source, **kwargs)
     paper_bytes(paper)
     metadata(meta)
     result = {"protocol": PROTOCOL, "repository_id": repository_id, "submitter_id": submitter_id,

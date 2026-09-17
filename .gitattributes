@@ -1,5 +1,7 @@
 # These files are cryptographic commitments: never normalize their raw bytes.
 papers/** -text
+assets/** -text
+taxonomy/** -text
 challenges/epochs/*.json -text
 challenges/calibrations/*.json -text
 tests/fixtures/**/epochs/*.json -text

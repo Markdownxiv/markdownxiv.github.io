@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:agent-preprints:epoch:v2",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "protocol": {
+      "const": "agent-preprints-v2"
+    },
+    "verifier": {
+      "const": "ap-verifier-v2"
+    },
+    "epoch_id": {
+      "type": "string",
+      "pattern": "^(dev-)?v2-[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "profile": {
+      "enum": [
+        "production",
+        "development"
+      ]
+    },
+    "repository_id": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*$",
+      "maxLength": 20
+    },
+    "not_before": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "salt": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "target": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "calibration_id": {
+      "type": "string"
+    },
+    "question_count": {
+      "const": "2"
+    },
+    "poa_policy": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "family": {
+                "const": "gf2-factor-v1"
+              },
+              "degree": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]*)$",
+                "maxLength": 80
+              }
+            },
+            "required": [
+              "family",
+              "degree"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "family": {
+                "const": "assignment-dual-v1"
+              },
+              "size": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]*)$",
+                "maxLength": 80
+              },
+              "cost_bits": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]*)$",
+                "maxLength": 80
+              }
+            },
+            "required": [
+              "family",
+              "size",
+              "cost_bits"
+            ]
+          }
+        ]
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "taxonomy_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "resource_policy": {
+      "const": {
+        "paper_bytes": "2097152",
+        "image_bytes": "2097152",
+        "image_count": "20",
+        "image_total_bytes": "10485760",
+        "image_pixels": "20000000",
+        "version_bytes": "12582912",
+        "media_types": [
+          "image/png",
+          "image/jpeg",
+          "image/webp"
+        ]
+      }
+    }
+  },
+  "required": [
+    "protocol",
+    "verifier",
+    "epoch_id",
+    "profile",
+    "repository_id",
+    "not_before",
+    "expires_at",
+    "salt",
+    "target",
+    "calibration_id",
+    "question_count",
+    "poa_policy",
+    "taxonomy_hash",
+    "resource_policy"
+  ]
+}

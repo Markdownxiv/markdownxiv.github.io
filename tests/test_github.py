@@ -72,6 +72,17 @@ class SourceTests(unittest.TestCase):
             api.fetch_paper(SOURCE)
         self.assertEqual(caught.exception.code, "private_source")
 
+    def test_v2_reads_two_mib_without_weakening_v1(self):
+        body = b"A" * (2 * 1024 * 1024)
+        api = MockAPI(body)
+        self.assertEqual(api.fetch_paper_v2(SOURCE), body)
+        with self.assertRaises(Rejection):
+            MockAPI(body).fetch_paper(SOURCE)
+        api = MockAPI(body + b"x")
+        with self.assertRaises(Rejection):
+            api.fetch_paper_v2(SOURCE)
+        self.assertFalse(any("/git/blobs/" in c for c in api.calls))
+
     def test_response_size_and_deadline(self):
         response = io.BytesIO(b"abcde")
         response.headers = {}
@@ -104,3 +115,12 @@ class SourceTests(unittest.TestCase):
                 bounded_read(Stalled(), 100, time.monotonic() + 1)
         self.assertEqual(caught.exception.code, "network_timeout")
         self.assertLess(time.monotonic() - start, 0.5)
+
+    def test_nested_request_cannot_extend_bundle_deadline(self):
+        start = time.monotonic()
+        with self.assertRaises(Rejection) as caught:
+            with wall_timeout(.02):
+                with wall_timeout(2):
+                    time.sleep(1)
+        self.assertEqual(caught.exception.code, "network_timeout")
+        self.assertLess(time.monotonic() - start, .3)

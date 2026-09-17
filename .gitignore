@@ -9,3 +9,5 @@ _site/
 *.pyc
 .coverage
 .archive.lock
+.transactions/
+.demo-v2/

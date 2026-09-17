@@ -3,16 +3,16 @@ import argparse
 import hashlib
 from pathlib import Path
 
-from .codec import read_json
+from .codec import read_json, timestamp
 from .errors import require
 
 
 def source_digest(root):
     root = Path(root)
     paths = [root / "config" / "production.json"]
-    for directory in ("papers", "challenges", "site", "src", "docs", "schemas"):
+    for directory in ("papers", "challenges", "site", "src", "docs", "schemas", "works", "assets", "taxonomy", "prompts"):
         paths.extend(p for p in (root / directory).rglob("*") if p.is_file() and
-                     "__pycache__" not in p.parts and p.suffix in (".json", ".md", ".py", ".css", ".js"))
+                     "__pycache__" not in p.parts and p.suffix in (".json", ".md", ".py", ".css", ".js", ".png", ".jpg", ".webp"))
     for name in ("agent-guide.md", "requirements.lock", "pyproject.toml"):
         if (root / name).exists():
             paths.append(root / name)
@@ -27,6 +27,11 @@ def source_digest(root):
 def guard(root, manifest):
     require(manifest["source_digest"] == source_digest(root), "stale_deployment",
             "Archive or build sources changed since this artifact was built. Run maintain or rerun all jobs to rebuild.")
+    state = Path(root) / "state" / "published.json"
+    if state.exists():
+        previous = read_json(state).get("built_at")
+        require(previous is None or timestamp(previous) <= timestamp(manifest["built_at"]), "stale_deployment",
+                "A newer artifact has already been published; rebuild instead of redeploying stale social snapshots.")
 
 
 if __name__ == "__main__":

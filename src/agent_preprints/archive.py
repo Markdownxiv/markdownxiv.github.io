@@ -20,6 +20,11 @@ def atomic_json(path, value):
         stream.flush()
         os.fsync(stream.fileno())
     os.replace(temporary, path)
+    descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 @contextlib.contextmanager
@@ -70,32 +75,36 @@ def receipt_path(root, snapshot):
     return Path(root) / "receipts" / (snapshot_key(snapshot) + ".json")
 
 
-def evaluate(snapshot, root, production=True, fetch_body=None, supplied_body=None):
+def evaluate(snapshot, root, production=True, fetch_body=None, supplied_body=None, fetch_asset=None, supplied_assets=None):
     snapshot_key(snapshot)
     require(snapshot["body"] is not None, "input_limit", "Issue package exceeded 60000 bytes at first observation.")
-    package = loads(snapshot["body"])
+    from .envelope import parse_submission
+    package = parse_submission(snapshot["body"])
     context = Context(snapshot["repository_id"], snapshot["submitter_id"], snapshot["received_at"])
     try:
-        return verify(package, root, context, production, fetch_body, supplied_body)
+        return verify(package, root, context, production, fetch_body, supplied_body, fetch_asset, supplied_assets)
     except Rejection as exc:
         if snapshot["mode"] == "observed" and exc.code in ("epoch_expired", "epoch_not_yet_valid", "epoch_unpublished_at_submission"):
             raise Rejection("original_snapshot_unavailable", "Original opened snapshot is unavailable; this complete body was checked at first observation. Create a new Issue with a current proof.") from exc
         raise
 
 
-def process(root, snapshot, production=True, fetch_body=None, supplied_body=None):
+def process(root, snapshot, production=True, fetch_body=None, supplied_body=None, fetch_asset=None, supplied_assets=None):
     with lock(root):
-        return _process(Path(root), snapshot, production, fetch_body, supplied_body)
+        from .works import recover
+        recover(root)
+        return _process(Path(root), snapshot, production, fetch_body, supplied_body, fetch_asset, supplied_assets)
 
 
-def _process(root, snapshot, production, fetch_body, supplied_body):
+def _process(root, snapshot, production, fetch_body, supplied_body, fetch_asset, supplied_assets):
     path = receipt_path(root, snapshot)
     if path.exists():
         record = read_json(path)
         if record["status"] != "retryable":
             return record
+        if snapshot != record["snapshot"]:
+            supplied_body, supplied_assets = None, None
         snapshot = record["snapshot"]  # Never replace the sealed body or observation time.
-        supplied_body = None  # A cache from a different event must not replace sealed source bytes.
     else:
         record = {"snapshot": snapshot, "status": "retryable", "error_code": "processing",
                   "message": "Request sealed; processing pending.", "paper_id": None, "content_hash": None,
@@ -105,9 +114,18 @@ def _process(root, snapshot, production, fetch_body, supplied_body):
     record["attempts"] = str(int(record["attempts"]) + 1)
     record["last_attempt_at"] = utcnow()
     try:
-        result = evaluate(snapshot, root, production, fetch_body, supplied_body)
+        result = evaluate(snapshot, root, production, fetch_body, supplied_body, fetch_asset, supplied_assets)
         package = result["proof"]["package"]
         record["content_hash"] = package["content_hash"]
+        from . import PROTOCOL_V2
+        if package["protocol"] == PROTOCOL_V2:
+            from .works import admit
+            record = admit(root, snapshot, result, record)
+            published = root / "state" / "published.json"
+            if published.exists() and record["paper_id"] in read_json(published)["paper_ids"]:
+                record.update({"published": True, "url": record["work_url"] + "v" + record["version"] + "/"})
+            atomic_json(path, record)
+            return record
         existing = None
         for meta_path in sorted((root / "papers").glob("*/metadata.json")):
             meta = read_json(meta_path)
@@ -134,6 +152,8 @@ def _process(root, snapshot, production, fetch_body, supplied_body):
         record.update({"status": "duplicate" if existing else "accepted", "error_code": None,
                        "message": "Body already archived." if existing else "Proofs verified; archived. Pages publication pending.",
                        "paper_id": paper_id, "archived": True})
+        from .works import migrate
+        migrate(root)
         # Reconcile a previously published duplicate without claiming a new deployment.
         published_path = root / "state" / "published.json"
         if published_path.exists() and paper_id in read_json(published_path)["paper_ids"]:
@@ -150,6 +170,9 @@ def public_receipt(record):
     result.update({"receipt_version": "agent-preprints-receipt-v1", "request_sha256": record["snapshot"]["request_sha256"],
                    "repository_id": record["snapshot"]["repository_id"], "issue_id": record["snapshot"]["issue_id"],
                    "publication_status": "published" if record["published"] else ("pending" if record["archived"] else "not_archived")})
+    if record.get("work_id"):
+        result["receipt_version"] = "agent-preprints-receipt-v2"
+        result.update({key: record[key] for key in ("work_id", "version", "work_url", "discussion_url")})
     return result
 
 
@@ -160,6 +183,11 @@ def mark_deployed(root, manifest, site_url):
     hexhash(manifest["source_digest"])
     timestamp(manifest["built_at"])
     root = Path(root)
+    published_state = root / "state" / "published.json"
+    if published_state.exists():
+        previous = read_json(published_state).get("built_at")
+        require(previous is None or timestamp(previous) <= timestamp(manifest["built_at"]),
+                "stale_deployment", "An older deployment cannot replace newer publication state.")
     for pid in manifest["paper_ids"]:
         hexhash(pid)
         require((root / "papers" / pid / "proof.json").is_file(), "manifest_mismatch", "Deployed manifest names an unknown paper.")
@@ -172,10 +200,12 @@ def mark_deployed(root, manifest, site_url):
         if entries[0]["published_at"] is None:
             entries[0]["published_at"] = manifest["built_at"]
     atomic_json(registry_path, registry)
-    atomic_json(root / "state" / "published.json", {"paper_ids": manifest["paper_ids"], "deployed_at": utcnow()})
+    atomic_json(root / "state" / "published.json", {"paper_ids": manifest["paper_ids"], "built_at": manifest["built_at"], "deployed_at": utcnow()})
     for path in (root / "receipts").glob("*.json"):
         record = read_json(path)
         if record["archived"] and record["paper_id"] in manifest["paper_ids"]:
             record.update({"published": True, "url": site_url.rstrip("/") + "/papers/" + record["paper_id"] + "/",
                            "message": "Proofs verified; archived and published. Not peer reviewed."})
+            if record.get("work_id"):
+                record["url"] = record["work_url"] + "v" + record["version"] + "/"
             atomic_json(path, record)

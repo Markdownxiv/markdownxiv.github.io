@@ -30,7 +30,7 @@ def fixture(root):
 
 
 def complete(package, epoch):
-    head = pow.header(package["repository_id"], package["epoch_hash"], package["submitter_id"], package["content_hash"])
+    head = pow.header(package["repository_id"], package["epoch_hash"], package["submitter_id"], package["content_hash"], package["protocol"])
     package["nonce"] = pow.mine(head, epoch["target"])
     problems = poa.sample(pow.seed(pow.verify(head, package["nonce"], epoch["target"])), epoch["poa_policy"])
     package["answers"] = solve(problems)

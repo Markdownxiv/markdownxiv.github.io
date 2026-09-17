@@ -22,7 +22,7 @@ def repository_name(value):
     return value
 
 
-def validate_source(source):
+def validate_source(source, image=False):
     fields(source, ["kind", "repository", "commit", "path"])
     require(source["kind"] == "github", "invalid_source", "Expected a GitHub source.")
     repository_name(source["repository"])
@@ -32,7 +32,7 @@ def validate_source(source):
     require(isinstance(path, str) and 1 <= len(path) <= 240 and
             re.fullmatch(r"[A-Za-z0-9_./-]+", path) and
             all(p not in ("", ".", "..") for p in path.split("/")) and
-            len(path.split("/")) <= 12 and path.lower().endswith((".md", ".markdown")),
+            len(path.split("/")) <= 12 and path.lower().endswith((".png", ".jpg", ".jpeg", ".webp") if image else (".md", ".markdown")),
             "unsafe_path", "Source path must name one bounded Markdown file without traversal.")
 
 
@@ -48,8 +48,11 @@ def wall_timeout(seconds):
             "The bounded GitHub client must run in the main thread on Linux/WSL.")
     def expired(*_):
         raise Rejection("network_timeout", "GitHub request exceeded its absolute wall deadline.", True)
+    previous_timer = signal.getitimer(signal.ITIMER_REAL)
     previous_handler = signal.signal(signal.SIGALRM, expired)
-    previous_timer = signal.setitimer(signal.ITIMER_REAL, max(0.001, seconds))
+    # Nested source/request deadlines must never extend the outer bundle budget.
+    effective = min(seconds, previous_timer[0]) if previous_timer[0] > 0 else seconds
+    signal.setitimer(signal.ITIMER_REAL, max(0.001, effective))
     start = time.monotonic()
     try:
         yield
@@ -80,6 +83,7 @@ class GitHub:
     def __init__(self, token=None, opener=None):
         self.token = token
         self.opener = opener or urllib.request.build_opener(NoRedirect())
+        self.source_cache = {}
 
     def request(self, method, path, data=None, limit=4_000_000, deadline=None):
         require(path.startswith("/") and not path.startswith("//") and "\r" not in path and "\n" not in path,
@@ -114,19 +118,37 @@ class GitHub:
         return self.request("GET", "/repos/" + repository_name(name))
 
     def fetch_paper(self, source):
-        validate_source(source)
+        return self.fetch_file(source, MAX_PAPER)
+
+    def fetch_paper_v2(self, source):
+        from .assets import MAX_PAPER as cap
+        return self.fetch_file(source, cap)
+
+    def fetch_asset(self, source):
+        from .assets import MAX_IMAGE
+        return self.fetch_file(source, MAX_IMAGE, image=True)
+
+    def fetch_file(self, source, cap, image=False):
+        validate_source(source, image)
         deadline = time.monotonic() + 30
         prefix = "/repos/" + source["repository"]
-        repo = self.request("GET", prefix, deadline=deadline)
+        def cached(path):
+            if path not in self.source_cache:
+                # Keep memory bounded; this cache is only an API optimization.
+                if len(self.source_cache) >= 32:
+                    self.source_cache.clear()
+                self.source_cache[path] = self.request("GET", path, deadline=deadline)
+            return self.source_cache[path]
+        repo = cached(prefix)
         require(repo.get("private") is False and repo.get("visibility", "public") == "public",
                 "private_source", "Body source must be a public repository.")
-        commit = self.request("GET", prefix + "/git/commits/" + source["commit"], deadline=deadline)
+        commit = cached(prefix + "/git/commits/" + source["commit"])
         require(commit.get("sha") == source["commit"], "source_mismatch", "Commit response mismatch.")
         tree_sha = commit["tree"]["sha"]
         components = source["path"].split("/")
         for index, component in enumerate(components):
             require(re.fullmatch(r"[0-9a-f]{40}", tree_sha), "source_mismatch", "Invalid tree object.")
-            tree = self.request("GET", prefix + "/git/trees/" + tree_sha, deadline=deadline)
+            tree = cached(prefix + "/git/trees/" + tree_sha)
             require(not tree.get("truncated"), "download_limit", "Truncated trees are unsupported.")
             matches = [e for e in tree["tree"] if e["path"] == component]
             require(len(matches) == 1, "source_missing", "Markdown file was not found at this commit.")
@@ -138,17 +160,17 @@ class GitHub:
             else:
                 require(entry["type"] == "blob" and entry["mode"] in ("100644", "100755"),
                         "unsafe_source", "Only ordinary files are accepted, never symlinks or submodules.")
-                require(type(entry.get("size")) is int and 0 < entry["size"] <= MAX_PAPER,
+                require(type(entry.get("size")) is int and 0 < entry["size"] <= cap,
                         "paper_limit", "Source file exceeds paper limit.")
         require(re.fullmatch(r"[0-9a-f]{40}", entry["sha"]), "source_mismatch", "Invalid blob object.")
-        blob = self.request("GET", prefix + "/git/blobs/" + entry["sha"], limit=MAX_PAPER * 2, deadline=deadline)
+        blob = self.request("GET", prefix + "/git/blobs/" + entry["sha"], limit=cap * 2, deadline=deadline)
         require(blob.get("encoding") == "base64" and blob.get("size") == entry["size"],
                 "source_mismatch", "Blob size or encoding mismatch.")
         try:
             body = base64.b64decode(blob["content"].replace("\n", ""), validate=True)
         except (ValueError, TypeError) as exc:
             raise Rejection("source_mismatch", "Invalid blob encoding.") from exc
-        require(len(body) == entry["size"] and len(body) <= MAX_PAPER,
+        require(len(body) == entry["size"] and len(body) <= cap,
                 "paper_limit", "Decoded blob size mismatch.")
         git_hash = hashlib.sha1(b"blob " + str(len(body)).encode("ascii") + b"\0" + body).hexdigest()
         require(git_hash == entry["sha"], "source_mismatch", "Git blob hash mismatch.")
@@ -162,9 +184,9 @@ class GitHub:
         return self.request("GET", "/repos/" + repository_name(repository) +
                             "/issues?state=all&sort=created&direction=asc&per_page=100&page=" + str(page))
 
-    def create_issue(self, repository, package_text, content_hash):
+    def create_issue(self, repository, package_text, content_hash, title=None):
         return self.request("POST", "/repos/" + repository_name(repository) + "/issues",
-                            {"title": "[preprint] " + content_hash, "body": package_text})
+                            {"title": "[preprint] " + (title[:230] if title else content_hash), "body": package_text})
 
     def comments(self, repository, number, page=1):
         return self.request("GET", "/repos/" + repository_name(repository) + "/issues/" + str(number) +

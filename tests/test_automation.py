@@ -75,3 +75,34 @@ class AutomationTests(unittest.TestCase):
         result = verify(package, self.root, Context("1", "2", self.received), fetch_body=api.fetch_paper)
         self.assertEqual(result["body"], body)
         self.assertEqual(len(api.calls), 5)
+
+    def test_binary_artifact_roundtrip_and_untrusted_digest(self):
+        cache = self.root / "cache"
+        snapshot = opened_snapshot(self.event, "test/offline-fixture", "1")
+        artifact = validate_snapshot(self.root, snapshot, self.api, cache)
+        self.assertIn("body_file", artifact)
+        self.assertNotIn("body_base64", artifact)
+        original = (cache / artifact["body_file"]).read_bytes()
+        (cache / artifact["body_file"]).write_bytes(original + b"tampering")
+        with self.assertRaises(Rejection) as caught:
+            ingest(self.root, [artifact], self.api, "1", cache)
+        self.assertEqual(caught.exception.code, "artifact_limit")
+        (cache / artifact["body_file"]).write_bytes(original)
+        records = ingest(self.root, [artifact], self.api, "1", cache)
+        self.assertEqual(records[0]["status"], "accepted")
+
+    def test_artifact_paths_and_symlinks_are_rejected(self):
+        cache = self.root / "cache"
+        artifact = validate_snapshot(self.root, opened_snapshot(self.event, "test/offline-fixture", "1"), self.api, cache)
+        changed = copy.deepcopy(artifact)
+        changed["body_file"] = "../submission.json"
+        with self.assertRaises(Rejection):
+            ingest(self.root, [changed], self.api, "1", cache)
+        file = cache / artifact["body_file"]
+        raw = file.read_bytes()
+        file.unlink()
+        target = self.root / "image-data"
+        target.write_bytes(raw)
+        file.symlink_to(target)
+        with self.assertRaises(Rejection):
+            ingest(self.root, [artifact], self.api, "1", cache)
