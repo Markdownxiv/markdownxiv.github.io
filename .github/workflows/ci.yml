@@ -33,3 +33,7 @@ jobs:
           python examples/local_demo.py --out .demo
           python examples/local_demo_v2.py --out .demo-v2
           preprints build --out _site
+      - name: Verify public source reads outside the token repository
+        run: python examples/check_public_source.py
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

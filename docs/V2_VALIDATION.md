@@ -18,9 +18,9 @@ owner checks, stale parents, metadata-only revisions, rollback, idempotent repla
 concurrent ID allocation, interrupted journal recovery and legacy migration.
 Local bare-Git tests include competing writers and a stale revision rejected after
 a non-fast-forward retry. Binary artifact tampering/path traversal/symlinks and
-stale publication rollback are also tested. The final executed count is recorded
-below after the deployment validation run. The full local command
-`python -m unittest discover -s tests -v` passed **95 tests in 61.120 seconds**.
+stale publication rollback are also tested. The final local command
+`python -m unittest discover -s tests -v` passed **96 tests in 75.908 seconds**,
+including the additional malformed-JSON-type regression discovered during final review.
 
 Browser checks used local Chromium, desktop 1280×1000 and mobile 390×844: homepage,
 short-ID search, category search, version figure load, no mobile horizontal overflow,
@@ -50,9 +50,55 @@ production target remains tied to its separately published measured calibration.
 
 ## Live verification
 
-Pending the authorized upgrade deployment and fresh production-proof revision.
-This section will be updated only after the actual Actions results and HTTP/CLI
-readback are observed.
+The authorized upgrade commit is `bf5277263b80603febb08c9077bb550f42540fa9`.
+[GitHub CI](https://github.com/kzoacn/Markdownxiv/actions/runs/35215603529)
+passed 95 tests in 11.974 seconds on its runner, both offline CLI demos and the
+production-root site build. [The upgrade deployment](https://github.com/kzoacn/Markdownxiv/actions/runs/35215635062)
+completed validation, archive, build, deploy and receipt jobs successfully.
+The v2 epoch was published at `2026-09-17T11:26:28Z`, with the original production
+calibration and target retained. The production CLI successfully downloaded and
+validated that epoch, taxonomy and work registry from actual GitHub Pages.
+
+An actual Chromium run against Pages verified short-ID search, legacy short routes,
+the social sync timestamp, all 149 category rows, category search and no JavaScript
+errors. Both archived v1 production proofs were independently reverified using their
+original receipt times. Their original body/metadata/proof bytes match the pre-upgrade
+Git objects. Existing bot receipts gained short human-facing aliases while retaining
+their original v1 machine JSON semantics and comment IDs.
+
+The English, illustrated revision was submitted exactly once as
+[Issue #3](https://github.com/kzoacn/Markdownxiv/issues/3). Its source is pinned to the
+upgrade commit; real GitHub tree/blob reads confirmed the exact manuscript and figure
+bytes before submission. Local production mining used one thread and took
+69.354162593 seconds by `perf_counter_ns`, including CLI startup. This is a random
+single success, not a replacement calibration or a guaranteed duration. Its nonce is
+`000000000fada4a3`; PoW hash
+`00000001e52857ee18e66b1561c7b4ff477b82ffde2daaaa492f75870df6f7a1`.
+Only then were the actual degree-192 factorization and 96×96/30-bit assignment
+sampled, solved with the explicitly invoked local public reference algorithms and
+verified with production policy. The complete readable Issue is 6142 UTF-8 bytes.
+[The real admission workflow](https://github.com/kzoacn/Markdownxiv/actions/runs/35216197658)
+completed all five jobs successfully. The published receipt identifies
+[mx:2609.00002v2](https://kzoacn.github.io/Markdownxiv/p/2609.00002/v2/),
+with the original Issue #2 retained as its discussion root.
+HTTP readback confirmed exact Markdown/image SHA-256 values, the old v1 short and
+full-hash URLs, two work entries and three immutable versions. Live Chromium checks
+confirmed the PNG's natural dimensions, MathML, actual declared AI, both history
+entries and a mobile layout without horizontal overflow or JavaScript errors.
+
+A final malformed-type fix turns invalid media/category values and non-object
+envelope payloads into structured rejections rather than uncaught exceptions.
+The accepted protocol and existing proof bytes are unchanged.
+
+The real admission workflow was rerun as attempt 2. Validation, archive and receipt
+jobs succeeded; build and deployment were correctly skipped because the version was
+already published. After fetching the branch again, every registered work, paper
+and image file matched its pre-rerun SHA-256: still two works and three versions.
+All three archived production proofs were independently reverified locally.
+
+CI also includes a read-only integration probe against a pinned Markdown blob in
+`github/markup`, outside this repository, using the same restricted Actions token
+permissions as validation. It does not upload, execute, archive or post that source.
 
 ## Remaining external checks
 

@@ -40,7 +40,8 @@ def validate_manifest(entries):
         paths.append(logical_path(item["path"]))
         hexhash(item["sha256"])
         total += decimal(item["size"], 1, MAX_IMAGE)
-        require(item["media_type"] in EXT, "invalid_image", "Unsupported image media type.")
+        require(isinstance(item["media_type"], str) and item["media_type"] in EXT,
+                "invalid_image", "Unsupported image media type.")
         require(item["path"].lower().endswith({"image/png": (".png",), "image/jpeg": (".jpg", ".jpeg"),
                                                "image/webp": (".webp",)}[item["media_type"]]),
                 "invalid_image", "Image path extension does not match declared media type.")

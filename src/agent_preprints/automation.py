@@ -221,7 +221,7 @@ def parse_comment(comment):
         return None
     try:
         value = loads(match.group(1))
-        if value.get("receipt_version") in ("agent-preprints-receipt-v1", "agent-preprints-receipt-v2"):
+        if isinstance(value, dict) and value.get("receipt_version") in ("agent-preprints-receipt-v1", "agent-preprints-receipt-v2"):
             return value
     except Rejection:
         pass

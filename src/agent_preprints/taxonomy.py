@@ -26,6 +26,7 @@ def ensure(root):
 
 
 def normalize(value, catalog):
+    require(isinstance(value, str), "invalid_category", "Category codes must be strings.")
     aliases = {a["code"]: a["target"] for a in catalog["aliases"]}
     value = aliases.get(value, value)
     require(value in {c["code"] for c in catalog["categories"]}, "invalid_category", "Unknown category in this taxonomy snapshot.")

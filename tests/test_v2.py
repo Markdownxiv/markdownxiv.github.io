@@ -121,6 +121,17 @@ class V2Tests(unittest.TestCase):
         self.assertNotIn("@everyone", preview)
         self.assertNotIn("[click]", preview)
 
+    def test_malformed_json_types_reject_without_crashing(self):
+        from agent_preprints.envelope import START, PAYLOAD, END
+        with self.assertRaises(Rejection):
+            parse_submission(START + "\n" + PAYLOAD + "[]" + END)
+        for value in ([], {}, None, True):
+            entry = {"path": "a.png", "sha256": "0" * 64, "size": "1", "media_type": value}
+            with self.assertRaises(Rejection):
+                assets.validate_manifest([entry])
+            with self.assertRaises(Rejection):
+                taxonomy.normalize(value, self.catalog)
+
     def test_unchanged_revision_is_rejected(self):
         first = self.accept()
         result = self.accept(self.revision(first), "11")

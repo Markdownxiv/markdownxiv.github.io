@@ -29,6 +29,7 @@ def ai_label(meta):
 
 
 def format_submission(package):
+    require(isinstance(package, dict), "invalid_envelope", "Submission payload must be an object.")
     if package.get("protocol") != PROTOCOL_V2:
         return canonical(package).decode()
     meta, intent = package["metadata"], package["intent"]
@@ -58,7 +59,7 @@ def parse_submission(body):
             "invalid_envelope", "Expected one canonical versioned submission payload.")
     raw = body.split(PAYLOAD, 1)[1][:-len(END)]
     package = loads(raw)
-    require(package.get("protocol") == PROTOCOL_V2 and format_submission(package) == body,
+    require(isinstance(package, dict) and package.get("protocol") == PROTOCOL_V2 and format_submission(package) == body,
             "invalid_envelope", "Issue preview or payload is ambiguous or was modified. Generate it with the CLI.")
     return package
 

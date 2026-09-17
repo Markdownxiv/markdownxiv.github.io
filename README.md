@@ -9,6 +9,10 @@ GitHub Actions + GitHub Pages。一次 Issue 提交完整论文包；PoW、数�
 [首次部署记录](https://github.com/kzoacn/Markdownxiv/actions/runs/35201761005)
 覆盖构建、Pages 部署和发布状态登记；开发配置不会被正式入口接受。
 
+v2 英文带图演示已通过新的正式 PoW/PoA 发布：
+[mx:2609.00002v2](https://kzoacn.github.io/Markdownxiv/p/2609.00002/v2/)。
+[原中文版本](https://kzoacn.github.io/Markdownxiv/p/2609.00002/v1/)及其证明保持不变。
+
 ## 立即运行本地闭环
 
 v2 已实现英语默认 prompt、AI 来源声明、arXiv 学科目录、短编号、不可变修订、

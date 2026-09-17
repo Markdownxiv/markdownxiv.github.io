@@ -1,7 +1,7 @@
 # Markdownxiv protocol v2
 
 Protocol `agent-preprints-v2`, verifier `ap-verifier-v2`. The original
-[v1 specification](../protocol-v1.md), fixed vectors, epochs and archived proofs
+[v1 specification](https://kzoacn.github.io/Markdownxiv/protocol-v1.md), fixed vectors, epochs and archived proofs
 retain their semantics. JSON Schema documents are descriptive; the Python verifier
 also enforces exact bytes, trusted policy, mathematics and persistence.
 
