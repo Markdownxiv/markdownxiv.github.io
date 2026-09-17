@@ -1,6 +1,6 @@
 name: Test local protocol and archive
 on:
-  pull_request:
+  workflow_dispatch:
   push:
     paths:
       - 'src/**'
@@ -17,6 +17,7 @@ permissions:
   contents: read
 jobs:
   test:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
@@ -32,6 +33,7 @@ jobs:
           python -m unittest discover -s tests -v
           python examples/local_demo.py --out .demo
           python examples/local_demo_v2.py --out .demo-v2
+          python examples/local_demo_v3.py --out .demo-v3
           preprints build --out _site
       - name: Verify public source reads outside the token repository
         run: python examples/check_public_source.py

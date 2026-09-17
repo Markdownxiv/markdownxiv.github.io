@@ -26,12 +26,12 @@ def main():
     run("challenge", "--root", target, "--dev")
     run("prepare", "--root", target, "--dev", "--repository-id", "1", "--user-id", "2",
         "--paper", project / "examples/paper.md", "--metadata", project / "examples/metadata.json", "--out", work / "prepared.json")
-    run("mine", "--root", target, "--dev", "--package", work / "prepared.json", "--checkpoint", work / "mining.json", "--out", work / "mined.json")
-    run("questions", "--root", target, "--dev", "--package", work / "mined.json", "--out", work / "questions.json")
+    run("pow", "--root", target, "--dev", "--package", work / "prepared.json", "--checkpoint", work / "pow-checkpoint.json", "--out", work / "proved.json")
+    run("questions", "--root", target, "--dev", "--package", work / "proved.json", "--out", work / "questions.json")
     problems = read_json(work / "questions.json")["problems"]
     assert int(problems[0]["degree"]) <= 32 and int(problems[1]["size"]) <= 12
     write_json(work / "answers.json", solve(problems))
-    run("pack", "--root", target, "--dev", "--package", work / "mined.json", "--answers", work / "answers.json", "--out", work / "submission.json")
+    run("pack", "--root", target, "--dev", "--package", work / "proved.json", "--answers", work / "answers.json", "--out", work / "submission.json")
     run("verify", "--root", target, "--dev", "--package", work / "submission.json")
     run("archive-demo", "--root", target, "--package", work / "submission.json")
     run("build", "--root", target, "--out", target / "_site", "--base-path", "/")

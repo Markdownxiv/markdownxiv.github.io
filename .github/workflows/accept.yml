@@ -1,7 +1,7 @@
 name: Accept preprint
 on:
-  issues:
-    types: [opened]
+  pull_request_target:
+    types: [opened, ready_for_review]
 permissions: {}
 concurrency:
   group: preprints-production
@@ -11,12 +11,12 @@ jobs:
   validate:
     outputs:
       artifact_name: validated-${{ github.run_attempt }}
-    if: startsWith(github.event.issue.title, '[preprint] ')
+    if: startsWith(github.event.pull_request.title, '[preprint] ') && !github.event.pull_request.draft && github.event.pull_request.base.ref == github.event.repository.default_branch
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     permissions:
       contents: read
-      issues: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -28,7 +28,7 @@ jobs:
       - run: |
           python -m pip install --require-hashes -r requirements.lock
           python -m pip install --no-deps --no-build-isolation -e .
-      - name: Validate original opened snapshot as data
+      - name: Validate the sealed PR commit as data
         run: python -m agent_preprints.automation validate-event
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -47,7 +47,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
-      issues: read
+      pull-requests: read
     outputs:
       sha: ${{ steps.archive.outputs.sha }}
       needs_deploy: ${{ steps.archive.outputs.needs_deploy }}
@@ -82,7 +82,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
-      issues: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -143,7 +143,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
-      issues: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

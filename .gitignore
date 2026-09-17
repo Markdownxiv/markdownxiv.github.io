@@ -11,3 +11,4 @@ _site/
 .archive.lock
 .transactions/
 .demo-v2/
+.demo-v3/

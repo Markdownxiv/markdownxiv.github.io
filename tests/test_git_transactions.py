@@ -56,6 +56,25 @@ class GitTests(unittest.TestCase):
         same, _ = tx.run(lambda tree: process(tree, snapshot(self.package), False))
         self.assertEqual(same, commit)
 
+    def test_v3_pr_paper_work_and_receipt_commit_together(self):
+        from test_v3 import v3_fixture, pr, bundle
+        from agent_preprints.pull_requests import capture
+        from support import NOW
+        _, package = v3_fixture(self.seed)
+        git(self.seed, "add", ".")
+        git(self.seed, "commit", "-m", "v3 fixture")
+        git(self.seed, "push", "origin", "main")
+        checkout = self.clone("pr-writer")
+        tx = GitTransaction(checkout, "main")
+        request = capture(pr(), "test/archive", "1", NOW)
+        commit, record = tx.run(lambda tree: process(tree, request, False, supplied_body=bundle(package)))
+        names = git(self.remote, "diff-tree", "--no-commit-id", "--name-only", "-r", commit).splitlines()
+        self.assertIn("receipts/1-pr-1.json", names)
+        self.assertIn("works/2609.00001.json", names)
+        self.assertIn("papers/" + record["paper_id"] + "/paper.md", names)
+        again, _ = tx.run(lambda tree: process(tree, request, False, supplied_body=bundle(package)))
+        self.assertEqual(commit, again)
+
     def test_crlf_paper_is_committed_verbatim_even_with_autocrlf(self):
         checkout = self.clone("crlf-writer")
         git(checkout, "config", "core.autocrlf", "true")

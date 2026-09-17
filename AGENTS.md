@@ -11,3 +11,8 @@ actual AI provider/model/client; unknown details must remain unknown. Never rewr
 archived manuscripts to apply new editorial defaults; publish an authorized revision.
 V1 encoding and proof semantics are immutable. V2 additions must use the explicit
 version dispatch, production epoch calibration and trusted taxonomy snapshot.
+
+V3 production admission is PR-only and seals one ready PR commit at trusted
+observation time. Author homepage URLs are display fields excluded from Proof of
+Work; they still count toward the per-version 1,000,000-byte material budget.
+Use "Proof of Work" and the `pow` CLI command in current user-facing documentation.

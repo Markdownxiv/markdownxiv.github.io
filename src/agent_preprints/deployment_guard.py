@@ -12,7 +12,7 @@ def source_digest(root):
     paths = [root / "config" / "production.json"]
     for directory in ("papers", "challenges", "site", "src", "docs", "schemas", "works", "assets", "taxonomy", "prompts"):
         paths.extend(p for p in (root / directory).rglob("*") if p.is_file() and
-                     "__pycache__" not in p.parts and p.suffix in (".json", ".md", ".py", ".css", ".js", ".png", ".jpg", ".webp"))
+                     "__pycache__" not in p.parts and p.suffix in (".json", ".md", ".py", ".css", ".js", ".svg", ".png", ".jpg", ".webp"))
     for name in ("agent-guide.md", "requirements.lock", "pyproject.toml"):
         if (root / name).exists():
             paths.append(root / name)

@@ -54,7 +54,7 @@ def main():
             # sealed request. In particular, do not rebase v2 onto itself.
             (work / "paper.md").write_bytes((root / "papers" / receipt["paper_id"] / "paper.md").read_bytes())
             print("Reusing completed development request " + number, flush=True)
-            run("archive-demo", "--root", root, "--package", prefix / "issue.md", "--paper", work / "paper.md",
+            run("archive-demo", "--root", root, "--package", prefix / "submission.json", "--paper", work / "paper.md",
                 "--issue-id", number, "--issue-number", number)
             continue
         extra = []
@@ -65,13 +65,12 @@ def main():
         run("revise" if revision else "prepare", "--root", root, "--dev", "--repository-id", "1", "--user-id", "2",
             "--paper", work / "paper.md", "--metadata", work / "metadata.json", "--source", work / "source.json",
             "--out", prefix / "prepared.json", *extra)
-        run("mine", "--root", root, "--dev", "--package", prefix / "prepared.json", "--checkpoint", prefix / "checkpoint.json", "--out", prefix / "mined.json")
-        run("questions", "--root", root, "--dev", "--package", prefix / "mined.json", "--out", prefix / "questions.json")
+        run("pow", "--root", root, "--dev", "--package", prefix / "prepared.json", "--checkpoint", prefix / "checkpoint.json", "--out", prefix / "proved.json")
+        run("questions", "--root", root, "--dev", "--package", prefix / "proved.json", "--out", prefix / "questions.json")
         write_json(prefix / "answers.json", solve(read_json(prefix / "questions.json")["problems"]))
-        run("pack", "--root", root, "--dev", "--package", prefix / "mined.json", "--answers", prefix / "answers.json", "--paper", work / "paper.md", "--out", prefix / "submission.json")
+        run("pack", "--root", root, "--dev", "--package", prefix / "proved.json", "--answers", prefix / "answers.json", "--paper", work / "paper.md", "--out", prefix / "submission.json")
         run("verify", "--root", root, "--dev", "--package", prefix / "submission.json", "--paper", work / "paper.md")
-        run("format-issue", "--package", prefix / "submission.json", "--out", prefix / "issue.md")
-        run("archive-demo", "--root", root, "--package", prefix / "issue.md", "--paper", work / "paper.md", "--issue-id", number, "--issue-number", number)
+        run("archive-demo", "--root", root, "--package", prefix / "submission.json", "--paper", work / "paper.md", "--issue-id", number, "--issue-number", number)
     run("build", "--root", root, "--out", root / "_site", "--base-path", "/")
     print("Development demo complete. Serve with:", sys.executable, "-m http.server 8000 --directory", root / "_site")
 

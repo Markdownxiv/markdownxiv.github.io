@@ -1,139 +1,83 @@
-# Threat model and operational limits
+# PR admission threat model
 
-## Trust boundary
+Trust the maintainers, default-branch implementation, measured calibration and epoch
+registry, pinned taxonomy, GitHub numerical identities, GitHub event delivery and
+TLS/API infrastructure. Calibration is an auditable measurement, not hardware
+attestation. A malicious maintainer can change trusted policy; this system does not
+protect against its own administrators. Historical details remain in
+[THREAT_MODEL_V2.md](THREAT_MODEL_V2.md).
 
-Trust default-branch maintainers/code, committed production calibration and epoch
-registries, GitHub's repository/user IDs, original Actions event payloads, TLS/API
-responses and official action/artifact infrastructure. There is no protection
-against a malicious maintainer changing trusted admission code or falsifying a
-benchmark. A calibration record is an auditable measurement declaration, not a
-hardware attestation. Repository administrators control the archive's policy.
+## Untrusted inputs
 
-An adversary may own many GitHub accounts and public repositories, open/edit/close
-Issues, post comments, supply arbitrary JSON/Markdown, exploit timing, outsource
-solving, optimize mining, replay requests and compete with concurrent submissions.
-An adversary has no write permission to the archive, no arbitrary URL fetcher,
-no execution slot for submitted programs and no client-selected difficulty.
+A participant can create forks and PRs, modify draft files, edit descriptions, push
+new commits, forge Git author timestamps, provide malformed JSON/Markdown/images,
+post comments, use multiple accounts, replay proofs and outsource all computation.
+These capabilities never grant archive write permission or execution of submitted
+programs. New production requests are v3 ready PRs, not Issues.
 
-## Binding, mathematical evidence, and gaming
+The workflow uses `pull_request_target` but always checks out trusted default-branch
+code. It never checks out or merges the contributor branch. Regular code CI does
+not run on submission branches. PR text is data in event/JSON files, never shell
+source, workflow YAML or executable certificates. Git subprocess arguments are
+fixed or validated trusted identifiers, with shell execution disabled.
 
-PoW commits to exact paper bytes through SHA-256, exact allowed metadata, target
-repository ID, submitting GitHub user ID and immutable epoch bytes (including
-salt, target, policy and version). Domain separation, byte lengths, fixed nonce
-width and integer endianness are specified. The verifier uses trusted server
-configuration and event IDs, not a client assertion. Cross-repository/account
-replay and post-mining text changes fail commitment checks. Hash collision
-resistance and SHA-256's usual pseudorandom mining model are assumptions.
+Only one bounded added submission directory is eligible. Its exact changed-file
+set must match the declared manuscript, canonical metadata, proof and image files.
+Only public GitHub commit/tree/blob APIs are used, with exact object hashes, safe
+paths, ordinary file modes, no redirects and bounded sizes/deadlines. Source data
+cannot select a different network host. Oversized/truncated API results fail closed.
 
-Every question seed comes from a valid PoW hash. There is no freely chosen seed
-or post-PoW metadata knob. Finding another valid nonce can still yield an easier
-problem; the design charges another successful PoW rather than claiming to
-eliminate grinding. The two mathematical generators sample input objects directly,
-without a secret answer or a public planted-solution shortcut. All certificates
-are independently checked and disclosed, and conventional public algorithms can
-solve both families quickly. No Agent identity, author quality, human exclusion,
-Sybil resistance, original authorship, research correctness or anti-outsourcing
-claim is justified. Exact-body deduplication is not plagiarism detection; changing
-one byte can evade it after providing fresh bound proofs.
+## Proofs, homepages and time
 
-The reference 300-second target is an expectation for a specified implementation,
-CPU/workload and thread count. Hardware, native implementations, ASICs/GPUs,
-batching and random variance change observed cost. A valid proof cannot establish
-that five minutes elapsed, that a CPU was used, or that the work had environmental
-or economic value. All answers and content are public. Epoch rotation changes
-public salts and parameters, not mathematical knowledge or family code by magic.
+PoW binds repository and submitting account IDs, the published epoch, manuscript
+bytes, author names, subject/AI metadata, image manifest and revision intent.
+Author homepage URLs are deliberately excluded. They are safe HTTPS display links,
+not verified identities. The sealed Git commit records their values; changing them
+before sealing does not require another PoW. They still count toward material size.
 
-## Input and execution safety
+The original ready event supplies immutable source commits. First durable processing
+seals those references with observation time. Later pushes and edits cannot replace
+the request. Recovery without an original persisted seal observes the current head
+at the current time, never the PR's earlier creation or an author-controlled date.
+This conservative policy can require resubmission after a long queue delay.
 
-Before body network access, the pipeline bounds/parses AP-JSON, checks a field
-whitelist, trusted identities and an immutable published production epoch, then
-checks PoW with one SHA-256. Integer/certificate/dimension/node/depth limits avoid
-unbounded arithmetic or parsing. The mathematical verifier has a deadline as well
-as finite operation sizes. Ordinary rendering happens in a separate process with
-CPU/memory/wall-clock limits; timeout falls back to escaped text. Renderer failure
-does not falsely accept a proof or stop publication of all other papers.
+The two mathematical families retain their definitions and independent verifiers.
+Public conventional algorithms solve them quickly. Neither these certificates nor
+PoW establish author/Agent identity, originality, paper correctness, time elapsed,
+exclusive account ownership, peer review or resistance to outsourced answers.
 
-No `eval`, submitted executable proofs, LLM grading, dynamic code import, mutable
-branch/tag ref, arbitrary HTTP URL, repository checkout of a submitter source,
-symlink/submodule dereference or unrestricted redirect is available. Body fetching
-uses only `api.github.com`, a public repo, a commit SHA, bounded nonrecursive tree
-walks, and one ordinary blob with size/object/SHA-256 checks. A large tree, invalid
-path or unavailable source is rejected. No paper images or attachments are fetched
-at build time or rendered as remote trackers. Explicit outbound links are permitted;
-following one is a reader's action, not part of server verification.
+## Storage and presentation
 
-Markdown disables raw HTML. Templates remain text. Dangerous URI schemes are not
-rendered as active links. LaTeX is converted into a whitelist of native MathML
-elements/attributes; unsupported or oversized expressions become escaped code.
-Page metadata is escaped, search uses `textContent`, and CSP disallows inline
-scripts, images and external requests. No CDN math script or browser token field
-exists. CSP is defense in depth: primary safety is rendering and escaping data.
+Material size is at most 1,000,000 bytes per version including canonical metadata
+and homepage display fields. The request proof and generated archived proof have
+independent limits. Declared sizes are checked against actual bytes. Image count,
+pixels, parser limits and isolated decoder resource limits still apply. Material is
+never silently recompressed or rewritten. Invalid proofs are rejected before large
+manuscript/image downloads.
 
-Issue content enters Python through `GITHUB_EVENT_PATH` or a bounded JSON artifact,
-never as shell program text or untrusted filesystem paths. Paper paths use full
-hashes. The only subprocesses execute fixed trusted programs/arguments (Git and
-local platform CLI), with `shell=False`. Git transaction write paths are limited to
-paper/receipt/challenge/state data. Source repositories never become build inputs
-other than the single already-hashed Markdown byte sequence.
+Atomic journals, compare-and-swap revision checks and fresh fast-forward Git
+transactions prevent partial acceptance and stale parent replacement. Non-fast-forward
+retries revalidate against current archive state. No forced updates are used. Accepted
+archives and their success receipts commit together; publication is only recorded
+after confirmed Pages success. Stale deployment artifacts are rejected.
 
-## Time, state and repeated delivery
+The site escapes author, title, abstract and discussion text. Homepages accept only
+HTTPS URLs without credentials or control characters. Search builds DOM nodes with
+textContent. CSP allows only same-origin assets, index requests and search forms.
+Raw Markdown is a separate exact-byte text response. Discussion previews are bounded,
+inert text and are not committed to Git. No browser token field or remote tracker
+image is embedded. Following an author or discussion link is a reader action.
 
-The original `opened` snapshot's body and time are checked together and sealed on
-first processing. A later Issue edit cannot fill missing answers, change a paper,
-or turn a rejected snapshot into a success. Recovery from a lost event checks the
-first reliably observed complete body at **observation time**, never with the old
-creation timestamp. Conservative recovery may require an honest user to resubmit
-and perform a new proof when the original window was lost. Deleted Issues cannot
-be recovered from the Issues listing, and missing credentials cannot be invented.
+## Operational limits
 
-Archive commits contain a paper and its success receipt atomically. Local directory
-rename and request seals handle interrupted work; fresh Git worktrees and ordinary
-fast-forward pushes avoid stale checkout overwrites. Conflicts cause bounded
-fresh-state revalidation. Same Issue identity returns the existing sealed result;
-same raw body hash returns the existing paper even under a changed title. A crash
-after successful remote push but before acknowledgment is safe on the next read.
+PoW cannot prevent a PR from being opened or every Actions runner startup. Forks,
+failed requests, receipt history, API calls and site rebuilds still consume resources.
+The finite workflow queue can overflow; recovery is bounded and may be delayed.
+GitHub permissions, branch rules, public-fork availability, scheduled-run delivery,
+Pages quotas and service outages remain external dependencies. The 900 MB generated
+site limit leaves operational headroom but does not provide unlimited archive scale.
 
-Both business workflows share a concurrency group spanning all write/deploy jobs.
-Finite queue capacity is handled by bounded cyclic Issue scanning, not an assumption
-that all pending runs survive. A deploy guard compares an artifact source digest
-against current trusted state, so rerunning a failed old deployment cannot knowingly
-replace newer archive content. All archive automation uses this lock; maintainers
-should also avoid unrelated manual Pages deployments and concurrent manual archive
-edits. A human push during a deploy remains outside GitHub's workflow lock; the
-next maintain rebuild reconciles it, and the manifest marks only actually included
-papers published. Publication metadata is conservative if the deploy succeeds but
-finalization fails: it stays pending until a successful retry.
-
-Comments are upserted using stored IDs plus bot-only markers. If a POST succeeds
-but its ID commit fails, a later marker scan usually finds it. The scan is capped
-at 1000 comments, so a large comment flood can cause duplicate bot comments; it
-still cannot create another paper. Validation retries are bounded/backed off and
-permanent rejections are sealed. Rebuilding and comment synchronization do not
-remine, re-solve or duplicate an already archived request.
-
-## Availability, cost and free-service limits
-
-PoW cannot prevent an invalid Issue from being created on GitHub or prevent all
-runner startups. Invalid submissions still consume API/runner/storage resources
-and create public sealed rejection records. Rejections skip the Pages rebuild,
-but this remains a small-scale public gate, not a complete DoS defense. Per-file
-and per-run limits do not create an unlimited total storage allowance. Full-site
-rebuilds, Git history growth, receipt scans and eventual recovery are intentionally
-simple and will limit scale. Under sustained abuse, maintainers may need to pause
-admission or use GitHub's normal repository abuse controls.
-
-The 100-entry Actions pending queue can overflow. API rate limits, token scope,
-branch rules, environment restrictions, scheduled-workflow disablement, canceled
-runs, artifact expiry, CDN propagation and GitHub outages can interrupt service.
-No artificial success receipt hides a failed write/deploy. An unavailable comment
-API can prevent a rejection receipt; maintenance attempts recovery later. The
-scan processes only bounded pages/candidates per run, so deadlines may expire
-before backlogged requests can be reliably observed.
-
-“Free” means small-scale use within GitHub's current offerings and acceptable-use
-terms. Submitters pay their own computation. There is no promise of infinite
-throughput, permanent free infrastructure or GitHub approval for this use case.
-This is a paper-archive gate, not a general remote job/compute service. See the
-official [hosted runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners),
-[Pages limits](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits),
-and [additional-product terms](https://docs.github.com/en/site-policy/github-terms/github-terms-for-additional-products-and-features).
+PR acceptance closes the discussion PR rather than merging its branch. Closing or
+commenting can fail independently and is retried; a comment does not substitute for
+an actual archive commit or deployment. Local API fixtures and bare-Git tests do not
+establish live behavior from a non-collaborator account with repository Issues disabled.

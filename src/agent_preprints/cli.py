@@ -6,7 +6,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-from . import poa, pow, PROTOCOL_V2
+from . import poa, pow, PROTOCOL_V2, PROTOCOL_V3
 from .archive import capture, process, public_receipt
 from .codec import MAX_PAPER, canonical, loads, read_json, sha, utcnow, write_json
 from .epochs import epoch_path, initialize, load_epoch, rotate, validate_epoch
@@ -35,7 +35,7 @@ def _local_assets(args, package):
 
 def download_challenge(site, output):
     address = site_address(site)
-    require(address.hostname.endswith(".github.io"), "invalid_site_url", "v1 challenge downloads require an official github.io Pages origin.")
+    require(address.hostname.endswith(".github.io"), "invalid_site_url", "Challenge downloads require an official github.io Pages origin.")
     base = site.rstrip("/") + "/"
     output = Path(output)
     opener = urllib.request.build_opener(NoRedirect())
@@ -54,7 +54,7 @@ def download_challenge(site, output):
     require(sha(raw) == latest["epoch_hash"], "epoch_hash_mismatch", "Downloaded epoch hash mismatch.")
     epoch = loads(raw)
     validate_epoch(epoch)
-    if epoch["protocol"] == PROTOCOL_V2:
+    if epoch["protocol"] in (PROTOCOL_V2, PROTOCOL_V3):
         from .codec import hexhash
         digest = hexhash(epoch["taxonomy_hash"])
         catalog = get("taxonomy/" + digest + ".json")
@@ -85,7 +85,7 @@ def parser():
     p = argparse.ArgumentParser(prog="preprints", description="Agent-native Markdown preprint admission")
     sub = p.add_subparsers(dest="command", required=True)
     for name in ("calibrate", "benchmark"):
-        cmd = sub.add_parser(name, help="Measure the local one-thread reference miner")
+        cmd = sub.add_parser(name, help="Measure the local single-thread Proof of Work implementation")
         cmd.add_argument("--seconds", type=int, default=10)
         cmd.add_argument("--cpu")
         cmd.add_argument("--conditions", required=True)
@@ -100,7 +100,7 @@ def parser():
     cmd.add_argument("--root", default=".")
     cmd.add_argument("--dev", action="store_true")
     cmd.add_argument("--repository-id", default="1")
-    cmd.add_argument("--protocol", choices=("v1", "v2"), help="New development roots default to v1 for compatibility; use v2 explicitly")
+    cmd.add_argument("--protocol", choices=("v1", "v2", "v3"), help="Choose a development protocol; current PR submissions use v3")
     cmd = sub.add_parser("challenge")
     cmd.add_argument("--root", default=".")
     cmd.add_argument("--site")
@@ -126,23 +126,24 @@ def parser():
     cmd.add_argument("--work-id", required=True)
     cmd = sub.add_parser("categories")
     cmd.add_argument("--root", default=".")
-    cmd = sub.add_parser("format-issue")
+    cmd = sub.add_parser("format-pr")
     cmd.add_argument("--package", required=True)
     cmd.add_argument("--out", required=True)
     cmd = sub.add_parser("migrate", help="Add local legacy work aliases; never pushes")
     cmd.add_argument("--root", default=".")
-    for name in ("mine", "verify-pow", "questions", "pack", "verify"):
+    for name in ("pow", "verify-pow", "questions", "pack", "verify"):
         cmd = sub.add_parser(name)
         cmd.add_argument("--root", default=".")
         cmd.add_argument("--package", required=True)
         cmd.add_argument("--dev", action="store_true")
-        if name in ("mine", "questions", "pack"):
+        if name in ("pow", "questions", "pack"):
             cmd.add_argument("--out", required=True)
-        if name == "mine":
+        if name == "pow":
             cmd.add_argument("--checkpoint", required=True)
             cmd.add_argument("--max-seconds", type=float)
         if name == "pack":
             cmd.add_argument("--answers", required=True)
+            cmd.add_argument("--homepages", help="JSON array of author homepage display URLs; does not change Proof of Work")
         if name in ("pack", "verify"):
             cmd.add_argument("--paper", help="Local bytes required for offline verification of a reference source")
             cmd.add_argument("--assets-dir")
@@ -153,6 +154,12 @@ def parser():
     cmd.add_argument("--issue-number", default="1")
     cmd.add_argument("--paper")
     cmd.add_argument("--assets-dir")
+    cmd = sub.add_parser("archive-pr-demo", help="Archive a local development PR bundle without network access")
+    cmd.add_argument("--root", required=True)
+    cmd.add_argument("--package", required=True)
+    cmd.add_argument("--paper", required=True)
+    cmd.add_argument("--assets-dir")
+    cmd.add_argument("--pr", default="1")
     cmd = sub.add_parser("build")
     cmd.add_argument("--root", default=".")
     cmd.add_argument("--out", default="_site")
@@ -164,9 +171,11 @@ def parser():
     cmd.add_argument("--package", required=True)
     cmd.add_argument("--paper")
     cmd.add_argument("--assets-dir")
+    cmd.add_argument("--checkpoint", help="PR creation checkpoint, defaults beside the package")
+    cmd.add_argument("--draft", action="store_true")
     cmd = sub.add_parser("status")
     cmd.add_argument("--repository", required=True)
-    cmd.add_argument("--issue", required=True, type=int)
+    cmd.add_argument("--pr", required=True, type=int)
     cmd.add_argument("--wait-seconds", type=int, default=0)
     return p
 
@@ -181,7 +190,7 @@ def execute(args):
         cid = initialize(args.root, read_json(args.calibration), args.repository, args.repository_id, args.site_url)
         config_path = Path(args.root) / "config/production.json"
         config = read_json(config_path)
-        config["protocol"] = PROTOCOL_V2
+        config["protocol"] = PROTOCOL_V3
         write_json(config_path, config)
         from . import taxonomy
         taxonomy.ensure(args.root)
@@ -198,12 +207,13 @@ def execute(args):
     elif command == "categories":
         from . import taxonomy
         _emit(taxonomy.load(args.root, taxonomy.ensure(args.root)))
-    elif command == "format-issue":
-        from .envelope import format_submission
+    elif command == "format-pr":
+        from .pr_client import format_pr
         from .protocol import validate_package
         package = read_json(args.package, 60000)
         validate_package(package)
-        Path(args.out).write_text(format_submission(package), encoding="utf-8")
+        require(package["protocol"] == PROTOCOL_V3, "protocol_version", "PR formatting requires v3.")
+        Path(args.out).write_text(format_pr(package), encoding="utf-8")
         _emit({"status": "formatted", "bytes": str(Path(args.out).stat().st_size)})
     elif command == "work":
         from .works import path
@@ -233,14 +243,14 @@ def execute(args):
         epoch = load_epoch(args.root, latest["epoch_id"], latest["epoch_hash"], utcnow(), args.repository_id, not args.dev)
         body = Path(args.paper).read_bytes()
         kwargs = {}
-        if epoch["protocol"] == PROTOCOL_V2:
+        if epoch["protocol"] in (PROTOCOL_V2, PROTOCOL_V3):
             from . import assets, taxonomy
             entries, _ = assets.collect_local(body, args.assets_dir or Path(args.paper).parent)
             kwargs = {"entries": entries, "asset_source": read_json(args.asset_source) if args.asset_source else None,
                       "catalog": taxonomy.load(args.root, epoch["taxonomy_hash"])}
         if command == "revise":
             from .works import path
-            require(epoch["protocol"] == PROTOCOL_V2, "protocol_version", "Revisions require a v2 challenge.")
+            require(epoch["protocol"] in (PROTOCOL_V2, PROTOCOL_V3), "protocol_version", "Revisions require a versioned challenge.")
             work = read_json(path(args.root, args.work_id))
             require(work["owner_id"] == args.user_id and work["repository_id"] == args.repository_id,
                     "revision_unauthorized", "The original submitter must prepare this revision.")
@@ -251,19 +261,24 @@ def execute(args):
         if epoch["protocol"] == PROTOCOL_V2:
             from .envelope import format_submission
             require(len(format_submission(result).encode()) <= 60000 - 8192, "input_limit",
-                    "Leave 8192 bytes for certificates before mining; use a pinned manuscript source or shorter metadata.")
+                    "Leave 8192 bytes for certificates before computing Proof of Work; use shorter metadata.")
         write_json(args.out, result)
-        _emit({"content_hash": result["content_hash"], "paper_sha256": result["paper_sha256"]})
-    elif command in ("mine", "verify-pow", "questions", "pack", "verify"):
+        report = {"content_hash": result["content_hash"], "paper_sha256": result["paper_sha256"]}
+        if epoch["protocol"] == PROTOCOL_V3:
+            from .protocol_v3 import material_size
+            report["material_bytes"] = str(material_size(result))
+            report["material_limit"] = "1000000"
+        _emit(report)
+    elif command in ("pow", "verify-pow", "questions", "pack", "verify"):
         package = read_json(args.package, 60_000)
         context = _client_context(package)
-        if command == "mine":
+        if command == "pow":
             from .protocol import validate_package
             validate_package(package)
             epoch = load_epoch(args.root, package["epoch_id"], package["epoch_hash"], context.received_at,
                                package["repository_id"], not args.dev)
             require(epoch["protocol"] == package["protocol"], "protocol_version", "Package and epoch protocols differ.")
-            if package["protocol"] == PROTOCOL_V2:
+            if package["protocol"] in (PROTOCOL_V2, PROTOCOL_V3):
                 from . import taxonomy
                 require(package["metadata"]["taxonomy_hash"] == epoch["taxonomy_hash"], "taxonomy_mismatch", "Use the epoch's taxonomy.")
                 taxonomy.validate_categories(package["metadata"], taxonomy.load(args.root, epoch["taxonomy_hash"]))
@@ -286,11 +301,17 @@ def execute(args):
         else:
             if command == "pack":
                 package["answers"] = read_json(args.answers)
+                if args.homepages:
+                    require(package["protocol"] == PROTOCOL_V3, "protocol_version", "Homepage display fields require v3.")
+                    package["author_homepages"] = read_json(args.homepages)
             result = verify(package, args.root, context, not args.dev,
                             supplied_body=Path(args.paper).read_bytes() if args.paper else None,
                             supplied_assets=_local_assets(args, package))
             if command == "pack":
                 write_json(args.out, package)
+                if package["protocol"] == PROTOCOL_V3:
+                    from .protocol_v3 import metadata_file
+                    write_json(Path(args.out).parent / "metadata.json", metadata_file(package))
             _emit({"valid": True, "paper_id": result["paper_id"], "results": result["proof"]["results"]})
     elif command == "archive-demo":
         package_text = Path(args.package).read_text(encoding="utf-8")
@@ -306,35 +327,42 @@ def execute(args):
                          supplied_assets=_local_assets(args, package))
         _emit(public_receipt(result))
         require(result["archived"], result["error_code"], result["message"])
+    elif command == "archive-pr-demo":
+        from .pull_requests import capture as capture_pr
+        from .protocol_v3 import metadata_file
+        package = read_json(args.package, 60_000)
+        epoch = read_json(epoch_path(args.root, package["epoch_id"]))
+        require(package["protocol"] == PROTOCOL_V3 and epoch["profile"] == "development", "development_required", "This demo only accepts development v3 proofs.")
+        repository = "local/demo"
+        pr = {"id": args.pr, "number": args.pr, "user": {"id": package["submitter_id"]}, "title": "[preprint] development",
+              "state": "open", "draft": False, "base": {"sha": "a" * 40, "repo": {"id": package["repository_id"], "full_name": repository}},
+              "head": {"sha": "b" * 40, "repo": {"id": "3", "full_name": "participant/demo", "private": False}}}
+        snapshot = capture_pr(pr, repository, package["repository_id"])
+        result = process(args.root, snapshot, False, supplied_body={"package": package, "paper": Path(args.paper).read_bytes(),
+                         "metadata": canonical(metadata_file(package)) + b"\n", "assets": _local_assets(args, package) or {}})
+        _emit(public_receipt(result))
+        require(result["archived"], result["error_code"], result["message"])
     elif command == "build":
         _emit(build(args.root, args.out, args.base_path, social=read_json(args.social, 4_000_000) if args.social else None))
     elif command == "submit":
         token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
         require(token, "auth_required", "Set the participant's GH_TOKEN locally; tokens are never part of submissions.")
         github = GitHub(token)
-        repository = github.repository(args.repository)
-        require(repository.get("private") is False, "private_repository", "The target must be public.")
-        user = github.request("GET", "/user")
         package = read_json(args.package, 60_000)
-        context = Context(str(repository["id"]), str(user["id"]), utcnow())
-        verify(package, args.root, context, True, github.fetch_paper_v2,
-               Path(args.paper).read_bytes() if args.paper else None, github.fetch_asset, _local_assets(args, package))
-        # On a transport ambiguity, do not automatically create a second Issue.
-        from .envelope import format_submission
-        title = package["metadata"]["title"]
-        if package.get("intent", {}).get("kind") == "revision":
-            title = package["intent"]["work_id"] + " · " + title
-        result = github.create_issue(args.repository, format_submission(package), package["content_hash"], title=title)
-        _emit({"issue_number": str(result["number"]), "issue_id": str(result["id"]), "url": result["html_url"]})
+        require(args.paper, "body_unavailable", "PR submission requires --paper and its local image files.")
+        from .pr_client import submit
+        result = submit(github, args.repository, package, args.root, Path(args.paper).read_bytes(),
+                        _local_assets(args, package) or {}, args.checkpoint or str(Path(args.package).with_suffix(".pr-checkpoint.json")), args.draft)
+        _emit({"pull_request_number": str(result["number"]), "pull_request_id": str(result["id"]), "url": result["html_url"]})
     elif command == "status":
         github = GitHub(os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN"))
-        require(args.issue > 0 and 0 <= args.wait_seconds <= 3600, "input_limit", "Invalid issue or wait limit.")
+        require(args.pr > 0 and 0 <= args.wait_seconds <= 3600, "input_limit", "Invalid PR number or wait limit.")
         from .automation import parse_comment
         deadline, delay = time.monotonic() + args.wait_seconds, 2
         while True:
             found = None
             for page in range(1, 11):
-                comments = github.comments(args.repository, args.issue, page)
+                comments = github.comments(args.repository, args.pr, page)
                 for comment in comments:
                     receipt = parse_comment(comment)
                     if receipt:
@@ -355,7 +383,10 @@ def main():
     try:
         execute(parser().parse_args())
     except Rejection as exc:
-        _emit({"status": "error", **exc.as_dict()})
+        failure = exc.as_dict()
+        if exc.code == "mining_paused":
+            failure.update(error_code="pow_paused", message="Proof of Work paused; checkpoint saved when supplied.")
+        _emit({"status": "error", **failure})
         return 2
     except (OSError, ValueError, KeyError) as exc:
         # No raw API bodies, tokens, or arbitrary exception text in machine output.

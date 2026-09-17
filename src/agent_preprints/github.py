@@ -22,7 +22,7 @@ def repository_name(value):
     return value
 
 
-def validate_source(source, image=False):
+def validate_source(source, image=False, data=False):
     fields(source, ["kind", "repository", "commit", "path"])
     require(source["kind"] == "github", "invalid_source", "Expected a GitHub source.")
     repository_name(source["repository"])
@@ -32,7 +32,7 @@ def validate_source(source, image=False):
     require(isinstance(path, str) and 1 <= len(path) <= 240 and
             re.fullmatch(r"[A-Za-z0-9_./-]+", path) and
             all(p not in ("", ".", "..") for p in path.split("/")) and
-            len(path.split("/")) <= 12 and path.lower().endswith((".png", ".jpg", ".jpeg", ".webp") if image else (".md", ".markdown")),
+            len(path.split("/")) <= 12 and path.lower().endswith((".json",) if data else ((".png", ".jpg", ".jpeg", ".webp") if image else (".md", ".markdown"))),
             "unsafe_path", "Source path must name one bounded Markdown file without traversal.")
 
 
@@ -128,8 +128,8 @@ class GitHub:
         from .assets import MAX_IMAGE
         return self.fetch_file(source, MAX_IMAGE, image=True)
 
-    def fetch_file(self, source, cap, image=False):
-        validate_source(source, image)
+    def fetch_file(self, source, cap, image=False, data=False):
+        validate_source(source, image, data)
         deadline = time.monotonic() + 30
         prefix = "/repos/" + source["repository"]
         def cached(path):
@@ -183,10 +183,6 @@ class GitHub:
     def issues_page(self, repository, page):
         return self.request("GET", "/repos/" + repository_name(repository) +
                             "/issues?state=all&sort=created&direction=asc&per_page=100&page=" + str(page))
-
-    def create_issue(self, repository, package_text, content_hash, title=None):
-        return self.request("POST", "/repos/" + repository_name(repository) + "/issues",
-                            {"title": "[preprint] " + (title[:230] if title else content_hash), "body": package_text})
 
     def comments(self, repository, number, page=1):
         return self.request("GET", "/repos/" + repository_name(repository) + "/issues/" + str(number) +

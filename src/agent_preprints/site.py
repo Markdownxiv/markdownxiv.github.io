@@ -46,7 +46,7 @@ def mathml(expression, options):
         return "<code>" + html.escape(expression) + "</code>"
 
 
-def render_markdown(text, image_urls=None):
+def render_markdown(text, image_urls=None, link_base=None):
     from markdown_it import MarkdownIt
     from mdit_py_plugins.dollarmath import dollarmath_plugin
     md = MarkdownIt("commonmark", {"html": False, "maxNesting": 24, "linkify": False})
@@ -57,6 +57,10 @@ def render_markdown(text, image_urls=None):
         token = tokens[idx]
         address = token.attrGet("href") or ""
         parts = urllib.parse.urlsplit(address)
+        if link_base and not parts.scheme and not parts.netloc and not address.startswith("/"):
+            address = urllib.parse.urljoin(link_base, address)
+            token.attrSet("href", address)
+            parts = urllib.parse.urlsplit(address)
         local = not parts.scheme and not parts.netloc and re.fullmatch(r"[A-Za-z0-9_./#-]+", address) is not None
         if not local and (parts.scheme not in ("http", "https", "mailto") or (parts.scheme != "mailto" and not parts.netloc)):
             token.attrSet("href", "#unsupported-link")
@@ -74,24 +78,24 @@ def render_markdown(text, image_urls=None):
     return md.render(text)
 
 
-def _render_worker(connection, text, image_urls):
+def _render_worker(connection, text, image_urls, link_base):
     try:
         import resource
         resource.setrlimit(resource.RLIMIT_CPU, (8, 8))
         resource.setrlimit(resource.RLIMIT_AS, (512 * 1024 * 1024, 512 * 1024 * 1024))
-        connection.send(render_markdown(text, image_urls))
+        connection.send(render_markdown(text, image_urls, link_base))
     except BaseException:
         connection.send("<pre>" + html.escape(text) + "</pre>")
     finally:
         connection.close()
 
 
-def safe_render(text, image_urls=None):
+def safe_render(text, image_urls=None, link_base=None):
     # Limits cover both LaTeX conversion and pathological Markdown. Timeout degrades
     # one document to escaped plain text instead of breaking publication of others.
     context = multiprocessing.get_context("spawn")
     parent, child = context.Pipe(duplex=False)
-    process = context.Process(target=_render_worker, args=(child, text, image_urls))
+    process = context.Process(target=_render_worker, args=(child, text, image_urls, link_base))
     process.start()
     child.close()
     try:
@@ -113,13 +117,17 @@ def _page(title, content, base, script=False):
     return ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
             "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'self'; "
-            "script-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'\">"
+            "script-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'\">"
             f"<title>{esc(title)} · Markdownxiv</title><link rel=\"stylesheet\" href=\"{base}assets/style.css\">"
             + (f"<script src=\"{base}assets/search.js\" defer></script>" if script else "") +
-            "</head><body><header><a class=\"brand\" href=\"" + base + "\">Markdownxiv</a>"
-            f"<nav><a href=\"{base}categories/\">Subjects</a><a href=\"{base}challenge/\">Challenge</a><a href=\"{base}guide/\">Agent guide</a>"
-            f"<a href=\"{base}protocol/\">Protocol</a></nav></header><main>{content}</main>"
-            "<footer>Open preprints · PoW + experimental mathematical challenges · Not peer reviewed</footer></body></html>")
+            f'<link rel="icon" href="{base}assets/mark.svg" type="image/svg+xml"></head><body>'
+            '<a class="skip-link" href="#content">Skip to content</a><header><div class="header-inner">'
+            f'<a class="brand" href="{base}"><img src="{base}assets/mark.svg" width="38" height="38" alt="">Markdownxiv</a>'
+            f'<form class="archive-search" role="search" action="{base}search/" method="get"><label class="sr-only" for="global-search">Search archive</label>'
+            '<input id="global-search" name="q" type="search" placeholder="Search" required><button type="submit">Search</button></form></div>'
+            f'<nav class="main-nav"><a href="{base}">Subjects</a><a href="{base}recent/">Recent</a><a href="{base}guide/">Submit / Agent guide</a>'
+            f'<a href="{base}challenge/">Proof of Work</a><a href="{base}protocol/">Protocol</a></nav></header><main id="content">{content}</main>'
+            '<footer><span>Markdownxiv</span><span>Open preprints / Not peer reviewed</span></footer></body></html>')
 
 
 def build(root, output, base_path=None, now=None, social=None):
@@ -144,8 +152,13 @@ def build(root, output, base_path=None, now=None, social=None):
         target = output / path / "index.html"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(_page(title, content, base, script), encoding="utf-8")
-    from .site_papers import build_papers
-    paper_ids = build_papers(root, output, base, page, safe_render, config, social)
+    from . import PROTOCOL_V3
+    if config.get("protocol") == PROTOCOL_V3:
+        from .catalog import build_catalog
+        paper_ids = build_catalog(root, output, base, page, config, social)
+    else:
+        from .site_papers import build_papers
+        paper_ids = build_papers(root, output, base, page, safe_render, config, social)
     registry = read_json(root / "challenges" / "registry.json")
     manifest_epochs = []
     for e in registry["epochs"]:
@@ -188,9 +201,9 @@ def build(root, output, base_path=None, now=None, social=None):
                                        (docs_root / "docs" / "PROTOCOL.md", "protocol", "Protocol")]:
         if source.exists():
             text = source.read_text(encoding="utf-8")
-            page(destination, title, safe_render(text))
+            page(destination, title, safe_render(text, link_base=base))
             shutil.copyfile(source, output / ("agent-guide.md" if destination == "guide" else "protocol.md"))
-    for source, target in (("PROTOCOL_V1.md", "protocol-v1.md"), ("AGENT_GUIDE_V1.md", "agent-guide-v1.md")):
+    for source, target in (("PROTOCOL_V1.md", "protocol-v1.md"), ("PROTOCOL_V2.md", "protocol-v2.md"), ("AGENT_GUIDE_V1.md", "agent-guide-v1.md")):
         if (docs_root / "docs" / source).exists():
             shutil.copyfile(docs_root / "docs" / source, output / target)
     (output / ".nojekyll").touch()

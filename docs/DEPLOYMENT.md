@@ -1,5 +1,8 @@
 # Deployment and recovery
 
+Historical Issue/v1/v2 deployment documentation. For the current PR-only system,
+use [PR_DEPLOYMENT.md](PR_DEPLOYMENT.md).
+
 ## V2 upgrade
 
 Existing v1 papers, proofs, metadata and epochs remain immutable. Run locally:

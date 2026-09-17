@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:agent-preprints:epoch:v3",
+  "type": "object", "additionalProperties": false,
+  "required": ["protocol", "verifier", "epoch_id", "profile", "repository_id", "not_before", "expires_at", "salt", "target", "calibration_id", "question_count", "poa_policy", "taxonomy_hash", "resource_policy"],
+  "properties": {
+    "protocol": {"const": "agent-preprints-v3"},
+    "verifier": {"const": "ap-verifier-v3"},
+    "epoch_id": {"type": "string", "pattern": "^(dev-)?v3-[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+    "profile": {"enum": ["production", "development"]},
+    "repository_id": {"$ref": "urn:agent-preprints:epoch:v2#/properties/repository_id"},
+    "not_before": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": "string", "format": "date-time"},
+    "salt": {"$ref": "urn:agent-preprints:epoch:v2#/properties/salt"},
+    "target": {"$ref": "urn:agent-preprints:epoch:v2#/properties/target"},
+    "calibration_id": {"type": "string"},
+    "question_count": {"const": "2"},
+    "poa_policy": {"$ref": "urn:agent-preprints:epoch:v2#/properties/poa_policy"},
+    "taxonomy_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "resource_policy": {"const": {"paper_bytes": "1000000", "image_bytes": "1000000", "image_count": "20", "image_total_bytes": "1000000", "image_pixels": "20000000", "version_bytes": "1000000", "media_types": ["image/png", "image/jpeg", "image/webp"], "metadata_included": true, "proof_bytes": "524288"}}
+  }
+}

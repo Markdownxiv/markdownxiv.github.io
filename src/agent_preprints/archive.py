@@ -63,12 +63,12 @@ def snapshot_key(snapshot):
         decimal(snapshot[key], 1)
     timestamp(snapshot["received_at"])
     hexhash(snapshot["request_sha256"])
-    require(snapshot["mode"] in ("opened", "observed"), "invalid_snapshot", "Invalid snapshot mode.")
+    require(snapshot["mode"] in ("opened", "observed", "pull_request"), "invalid_snapshot", "Invalid snapshot mode.")
     if snapshot["body"] is not None:
         require(isinstance(snapshot["body"], str) and len(snapshot["body"].encode("utf-8")) <= MAX_PACKAGE
                 and sha(snapshot["body"].encode("utf-8")) == snapshot["request_sha256"],
                 "invalid_snapshot", "Snapshot digest mismatch.")
-    return snapshot["repository_id"] + "-" + snapshot["issue_id"]
+    return snapshot["repository_id"] + ("-pr-" if snapshot["mode"] == "pull_request" else "-") + snapshot["issue_id"]
 
 
 def receipt_path(root, snapshot):
@@ -77,6 +77,9 @@ def receipt_path(root, snapshot):
 
 def evaluate(snapshot, root, production=True, fetch_body=None, supplied_body=None, fetch_asset=None, supplied_assets=None):
     snapshot_key(snapshot)
+    if snapshot["mode"] == "pull_request":
+        from .pull_requests import evaluate as evaluate_pr
+        return evaluate_pr(snapshot, root, production, fetch_body, supplied_body)
     require(snapshot["body"] is not None, "input_limit", "Issue package exceeded 60000 bytes at first observation.")
     from .envelope import parse_submission
     package = parse_submission(snapshot["body"])
@@ -117,13 +120,18 @@ def _process(root, snapshot, production, fetch_body, supplied_body, fetch_asset,
         result = evaluate(snapshot, root, production, fetch_body, supplied_body, fetch_asset, supplied_assets)
         package = result["proof"]["package"]
         record["content_hash"] = package["content_hash"]
-        from . import PROTOCOL_V2
-        if package["protocol"] == PROTOCOL_V2:
+        from . import PROTOCOL_V2, PROTOCOL_V3
+        if package["protocol"] in (PROTOCOL_V2, PROTOCOL_V3):
             from .works import admit
             record = admit(root, snapshot, result, record)
             published = root / "state" / "published.json"
             if published.exists() and record["paper_id"] in read_json(published)["paper_ids"]:
                 record.update({"published": True, "url": record["work_url"] + "v" + record["version"] + "/"})
+                if package["protocol"] == PROTOCOL_V3:
+                    from .works import all_works, annotate
+                    work = next(w for w in all_works(root) if w["work_id"] == record["work_id"])
+                    entry = next(v for v in work["versions"] if v["content_hash"] == record["paper_id"])
+                    annotate(record, work, entry, root)
             atomic_json(path, record)
             return record
         existing = None
@@ -173,6 +181,11 @@ def public_receipt(record):
     if record.get("work_id"):
         result["receipt_version"] = "agent-preprints-receipt-v2"
         result.update({key: record[key] for key in ("work_id", "version", "work_url", "discussion_url")})
+    if record["snapshot"]["mode"] == "pull_request":
+        from .pull_requests import source
+        result.update({"receipt_version": "markdownxiv-receipt-v3", "pull_request_id": result.pop("issue_id"),
+                       "pull_request_number": record["snapshot"]["issue_number"],
+                       "head_sha": source(record["snapshot"])["head_sha"]})
     return result
 
 
@@ -208,4 +221,6 @@ def mark_deployed(root, manifest, site_url):
                            "message": "Proofs verified; archived and published. Not peer reviewed."})
             if record.get("work_id"):
                 record["url"] = record["work_url"] + "v" + record["version"] + "/"
+                if record["snapshot"]["mode"] == "pull_request":
+                    record["url"] = site_url.rstrip("/") + "/abs/" + record["work_id"][3:] + "v" + record["version"] + "/"
             atomic_json(path, record)

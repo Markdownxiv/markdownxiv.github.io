@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:markdownxiv:receipt:v3",
+  "type": "object", "additionalProperties": false,
+  "required": ["receipt_version", "status", "paper_id", "content_hash", "error_code", "message", "archived", "published", "url", "request_sha256", "repository_id", "publication_status", "pull_request_id", "pull_request_number", "head_sha"],
+  "properties": {
+    "receipt_version": {"const": "markdownxiv-receipt-v3"},
+    "status": {"enum": ["accepted", "duplicate", "rejected", "retryable"]},
+    "paper_id": {"$ref": "urn:agent-preprints:receipt:v2#/properties/paper_id"},
+    "content_hash": {"$ref": "urn:agent-preprints:receipt:v2#/properties/content_hash"},
+    "error_code": {"type": ["string", "null"]},
+    "message": {"type": "string"},
+    "archived": {"type": "boolean"},
+    "published": {"type": "boolean"},
+    "url": {"type": ["string", "null"]},
+    "request_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "repository_id": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+    "publication_status": {"enum": ["published", "pending", "not_archived"]},
+    "pull_request_id": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+    "pull_request_number": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+    "head_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "work_id": {"$ref": "urn:agent-preprints:receipt:v2#/properties/work_id"},
+    "version": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+    "work_url": {"type": "string", "format": "uri"},
+    "discussion_url": {"type": "string", "format": "uri"}
+  }
+}

@@ -20,7 +20,7 @@ def categories(meta, base):
 
 
 def discussion(work, snapshot, repository):
-    url = "https://github.com/" + repository + "/issues/" + work["root_issue_number"]
+    url = "https://github.com/" + repository + ("/pull/" if work.get("discussion_kind") == "pull_request" else "/issues/") + work["root_issue_number"]
     content = '<section class="discussion"><h2>Discussion & reactions</h2><p><a href="' + url + '">Comment, 👍 or 👎 on GitHub</a></p>'
     content += '<p class="note">Reactions are independent GitHub expressions, not exclusive votes or a quality score.</p>'
     if snapshot and snapshot.get("status") == "synced":
@@ -33,6 +33,13 @@ def discussion(work, snapshot, repository):
             content += '<div class="comment-text">' + esc(comment["body"]) + '</div></div>'
     else:
         content += '<p class="note">No discussion snapshot in this build. Open GitHub for current reactions and comments.</p>'
+    if work.get("discussion_kind") == "pull_request":
+        content = '<section class="discussion"><h2>Discussion</h2><p><a href="' + url + '">PR #' + esc(work["root_issue_number"]) + '</a></p>'
+        if snapshot and snapshot.get("status") == "synced":
+            content += '<p>' + esc(snapshot["comment_count"]) + ' comments / +1 ' + esc(snapshot["likes"]) + ' / -1 ' + esc(snapshot["dislikes"]) + '</p>'
+            content += '<p class="note">Updated ' + esc(snapshot["last_synced_at"]) + '</p>'
+            for comment in snapshot["comments"]:
+                content += '<div class="comment"><p><a href="' + url + '#issuecomment-' + esc(comment["id"]) + '">' + esc(comment["author"]) + '</a> / ' + esc(comment["updated_at"]) + '</p><div class="comment-text">' + esc(comment["body"]) + '</div></div>'
     return content + '</section>'
 
 

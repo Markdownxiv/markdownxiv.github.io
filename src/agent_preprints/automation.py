@@ -1,4 +1,4 @@
-"""Trusted Actions entry points. There is deliberately NO development-profile switch."""
+"""Git transactions, receipts and historical fixtures. Actions admission delegates to PR-only code."""
 import argparse
 import base64
 import json
@@ -60,8 +60,8 @@ class GitTransaction:
                     self.git(worktree, "add", "--all", "--", *paths)
                     staged = self.git(worktree, "diff", "--cached", "--name-only", "-z").stdout.split("\0")
                     allowed = re.compile(r"(?:papers/[0-9a-f]{64}/(?:paper\.md|metadata\.json|proof\.json)|"
-                                         r"receipts/[0-9]+-[0-9]+\.json|challenges/(?:latest\.json|registry\.json|"
-                                         r"epochs/(?:v2-)?\d{4}-\d{2}-\d{2}\.json)|state/(?:scan|published)\.json|"
+                                         r"receipts/[0-9]+-(?:pr-)?[0-9]+\.json|challenges/(?:latest\.json|registry\.json|"
+                                         r"epochs/(?:v[23]-)?\d{4}-\d{2}-\d{2}\.json)|state/(?:scan|published)\.json|"
                                          r"works/[0-9]{4}\.[0-9]{5,10}\.json|assets/[0-9a-f]{64}\.(?:png|jpg|webp))\Z")
                     require(all(not name or allowed.fullmatch(name) for name in staged),
                             "unsafe_write", "Transaction attempted to modify a non-data path.")
@@ -221,7 +221,7 @@ def parse_comment(comment):
         return None
     try:
         value = loads(match.group(1))
-        if isinstance(value, dict) and value.get("receipt_version") in ("agent-preprints-receipt-v1", "agent-preprints-receipt-v2"):
+        if isinstance(value, dict) and value.get("receipt_version") in ("agent-preprints-receipt-v1", "agent-preprints-receipt-v2", "markdownxiv-receipt-v3"):
             return value
     except Rejection:
         pass
@@ -276,7 +276,8 @@ def sync_receipts(root, github, repository, limit=20):
                                "display_discussion_url": "https://github.com/" + repository + "/issues/" + work["root_issue_number"]})
         from .envelope import receipt_body
         digest = sha(receipt_body(record).encode())
-        if digest == record["comment_digest"]:
+        needs_close = record["snapshot"]["mode"] == "pull_request" and record["published"] and not record.get("pr_closed")
+        if digest == record["comment_digest"] and not needs_close:
             continue
         if count >= limit:
             break
@@ -284,6 +285,9 @@ def sync_receipts(root, github, repository, limit=20):
         try:
             record["comment_id"] = upsert_comment(github, repository, record)
             record["comment_digest"] = digest
+            if needs_close:
+                github.request("PATCH", "/repos/" + repository_name(repository) + "/pulls/" + record["snapshot"]["issue_number"], {"state": "closed"})
+                record["pr_closed"] = True
             atomic_json(path, record)
         except Rejection as exc:
             print(canonical({"receipt_sync": "pending", "error_code": exc.code}).decode(), file=sys.stderr)
@@ -302,76 +306,8 @@ def _workflow_context():
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=("validate-event", "collect", "ingest-event", "maintain", "finalize"))
-    parser.add_argument("--root", default=".")
-    parser.add_argument("--artifact", default=".work/validated.json")
-    parser.add_argument("--manifest", default=".work/manifest.json")
-    args = parser.parse_args()
-    try:
-        github, repository, repository_id, branch = _workflow_context()
-        if args.command in ("validate-event", "ingest-event"):
-            require(os.environ.get("GITHUB_EVENT_NAME") == "issues", "event_mismatch", "Expected issues.opened event.")
-            event_path = Path(os.environ["GITHUB_EVENT_PATH"])
-            require(event_path.stat().st_size < 2_000_000, "input_limit", "Event payload too large.")
-            event = json.loads(event_path.read_bytes())
-            snapshot = opened_snapshot(event, repository, repository_id)
-        else:
-            require(os.environ.get("GITHUB_REF") == "refs/heads/" + branch or args.command == "finalize",
-                    "event_mismatch", "Maintenance must run on the default branch.")
-        if args.command == "validate-event":
-            write_json(args.artifact, {"validated": [validate_snapshot(args.root, snapshot, github, Path(args.artifact).parent / "cache")]})
-            return 0
-        if args.command == "collect":
-            plan = collect(args.root, github, repository, repository_id)
-            write_json(args.artifact, {"validated": [validate_snapshot(args.root, s, github, Path(args.artifact).parent / "cache") for s in plan["snapshots"]],
-                                       "next_page": plan["next_page"]})
-            return 0
-        data = read_json(args.artifact, 12_000_000) if args.command in ("ingest-event", "maintain") else None
-        if args.command == "ingest-event":
-            fields(data, ["validated"])
-            require(len(data["validated"]) == 1, "artifact_limit", "Expected one event snapshot.")
-            # A previously sealed snapshot may differ from the current edited event, but
-            # only trusted repository state may authorize using it (process enforces this).
-            candidate = data["validated"][0]["snapshot"]
-            require(snapshot_key(candidate) == snapshot_key(snapshot), "event_mismatch", "Artifact Issue mismatch.")
-            if candidate != snapshot:
-                sealed = read_json(receipt_path(args.root, snapshot))
-                require(candidate == sealed["snapshot"], "event_mismatch", "Artifact snapshot differs from event and sealed record.")
-        if args.command == "maintain":
-            fields(data, ["validated", "next_page"])
-            require(isinstance(data["validated"], list) and len(data["validated"]) <= 5, "artifact_limit", "Maintenance batch limit exceeded.")
-            decimal(data["next_page"], 1, 1_000_000)
-        def mutate(root):
-            from .archive import lock
-            from .works import migrate, recover
-            with lock(root):
-                recover(root)
-                migrate(root)
-            if args.command == "maintain":
-                rotate(root)
-            if data is not None:
-                records = ingest(root, data["validated"], github, repository_id, Path(args.artifact).parent / "cache")
-                if args.command == "maintain":
-                    atomic_json(root / "state" / "scan.json", {"page": data["next_page"]})
-                return [public_receipt(r) for r in records]
-            if os.environ.get("DEPLOYMENT_RESULT") == "success":
-                config = read_json(root / "config" / "production.json")
-                mark_deployed(root, read_json(args.manifest), config["site_url"])
-            sync_receipts(root, github, repository)
-            return []
-        transaction = GitTransaction(args.root, branch)
-        commit, results = transaction.run(mutate)
-        if os.environ.get("GITHUB_OUTPUT"):
-            with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-                output.write("sha=" + commit + "\n")
-                needs_deploy = args.command == "maintain" or any(r["archived"] and not r["published"] for r in results)
-                output.write("needs_deploy=" + ("true" if needs_deploy else "false") + "\n")
-        print(canonical({"commit": commit, "receipts": results}).decode())
-        return 0
-    except Rejection as exc:
-        print(canonical({"status": "error", **exc.as_dict()}).decode())
-        return 2
+    from .pr_automation import main as pr_main
+    return pr_main()
 
 
 if __name__ == "__main__":

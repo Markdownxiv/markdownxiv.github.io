@@ -3,7 +3,7 @@ import secrets
 from datetime import timedelta
 from pathlib import Path
 
-from . import PROTOCOL, VERIFIER, PROTOCOL_V2, VERIFIER_V2
+from . import PROTOCOL, VERIFIER, PROTOCOL_V2, VERIFIER_V2, PROTOCOL_V3, VERIFIER_V3
 from .codec import (canonical, decimal, fields, hexhash, read_json, sha,
                     timestamp, utcnow, write_json)
 from .errors import Rejection, require
@@ -12,22 +12,25 @@ from .pow import target_int, validate_calibration
 
 
 def epoch_path(root, epoch_id):
-    require(isinstance(epoch_id, str) and re.fullmatch(r"(?:dev-)?(?:v2-)?\d{4}-\d{2}-\d{2}", epoch_id),
+    require(isinstance(epoch_id, str) and re.fullmatch(r"(?:dev-)?(?:v[23]-)?\d{4}-\d{2}-\d{2}", epoch_id),
             "unknown_epoch", "Invalid epoch identifier.")
     return Path(root) / "challenges" / "epochs" / (epoch_id + ".json")
 
 
 def validate_epoch(epoch, production=True):
-    v2 = isinstance(epoch, dict) and epoch.get("protocol") == PROTOCOL_V2
+    v2 = isinstance(epoch, dict) and epoch.get("protocol") in (PROTOCOL_V2, PROTOCOL_V3)
+    v3 = isinstance(epoch, dict) and epoch.get("protocol") == PROTOCOL_V3
     fields(epoch, ["protocol", "verifier", "epoch_id", "profile", "repository_id", "not_before",
                    "expires_at", "salt", "target", "calibration_id", "question_count", "poa_policy"]
            + (["taxonomy_hash", "resource_policy"] if v2 else []))
-    require((epoch["protocol"], epoch["verifier"]) in ((PROTOCOL, VERIFIER), (PROTOCOL_V2, VERIFIER_V2)),
+    require((epoch["protocol"], epoch["verifier"]) in ((PROTOCOL, VERIFIER), (PROTOCOL_V2, VERIFIER_V2), (PROTOCOL_V3, VERIFIER_V3)),
             "protocol_version", "Unsupported protocol or verifier version.")
     epoch_path(".", epoch["epoch_id"])
-    require(("v2-" in epoch["epoch_id"]) == v2, "invalid_epoch", "Epoch identifier/protocol mismatch.")
+    require(("v3-" in epoch["epoch_id"]) == v3 and ("v2-" in epoch["epoch_id"]) == (v2 and not v3), "invalid_epoch", "Epoch identifier/protocol mismatch.")
     if v2:
         from .assets import POLICY
+        if v3:
+            from .protocol_v3 import POLICY
         hexhash(epoch["taxonomy_hash"])
         require(epoch["resource_policy"] == POLICY, "invalid_policy", "Unsupported resource policy.")
     require(epoch["profile"] in ("production", "development") and
@@ -92,8 +95,8 @@ def rotate(root, now=None, development=False, repository_id="1", protocol=None):
         validate_calibration(calibration)
         profile, target, policy = "production", calibration["target"], PRODUCTION_POLICY
         repository_id = config["repository_id"]
-    require(protocol in (PROTOCOL, PROTOCOL_V2), "protocol_version", "Unsupported epoch protocol.")
-    eid = ("dev-" if development else "") + ("v2-" if protocol == PROTOCOL_V2 else "") + moment.strftime("%Y-%m-%d")
+    require(protocol in (PROTOCOL, PROTOCOL_V2, PROTOCOL_V3), "protocol_version", "Unsupported epoch protocol.")
+    eid = ("dev-" if development else "") + (protocol.rsplit("-", 1)[1] + "-" if protocol != PROTOCOL else "") + moment.strftime("%Y-%m-%d")
     path = epoch_path(root, eid)
     registry_path = root / "challenges" / "registry.json"
     registry = read_json(registry_path) if registry_path.exists() else {"epochs": []}
@@ -105,13 +108,16 @@ def rotate(root, now=None, development=False, repository_id="1", protocol=None):
                 "immutable_conflict", "Existing epoch is absent from registry or was modified.")
     else:
         # Never backdate publication, even when a scheduled run starts late.
-        epoch = {"protocol": protocol, "verifier": VERIFIER_V2 if protocol == PROTOCOL_V2 else VERIFIER, "epoch_id": eid, "profile": profile,
+        epoch = {"protocol": protocol, "verifier": {PROTOCOL: VERIFIER, PROTOCOL_V2: VERIFIER_V2, PROTOCOL_V3: VERIFIER_V3}[protocol], "epoch_id": eid, "profile": profile,
                  "repository_id": repository_id, "not_before": now,
                  "expires_at": (moment + timedelta(hours=48)).strftime("%Y-%m-%dT%H:%M:%SZ"),
                  "salt": secrets.token_hex(32), "target": target, "calibration_id": cid, "question_count": "2", "poa_policy": policy}
-        if protocol == PROTOCOL_V2:
+        if protocol in (PROTOCOL_V2, PROTOCOL_V3):
             from . import assets, taxonomy
             epoch.update({"taxonomy_hash": taxonomy.ensure(root), "resource_policy": assets.POLICY})
+            if protocol == PROTOCOL_V3:
+                from .protocol_v3 import POLICY
+                epoch["resource_policy"] = POLICY
         validate_epoch(epoch, not development)
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("xb") as stream:

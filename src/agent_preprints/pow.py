@@ -15,8 +15,8 @@ IMPLEMENTATION = "python-hashlib-copy-sha256-u64be-v1"
 def header(repository_id, epoch_hash, submitter_id, content_hash, protocol="agent-preprints-v1"):
     decimal(repository_id, 1)
     decimal(submitter_id, 1)
-    require(protocol in ("agent-preprints-v1", "agent-preprints-v2"), "protocol_version", "Unsupported PoW protocol.")
-    domain = b"agent-preprints-pow-v2" if protocol == "agent-preprints-v2" else b"agent-preprints-pow-v1"
+    require(protocol in ("agent-preprints-v1", "agent-preprints-v2", "agent-preprints-v3"), "protocol_version", "Unsupported PoW protocol.")
+    domain = ("agent-preprints-pow-" + protocol.rsplit("-", 1)[1]).encode("ascii")
     parts = [domain, repository_id.encode("ascii"),
              bytes.fromhex(hexhash(epoch_hash)), submitter_id.encode("ascii"),
              bytes.fromhex(hexhash(content_hash))]

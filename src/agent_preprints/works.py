@@ -9,7 +9,7 @@ import re
 import shutil
 from pathlib import Path
 
-from . import PROTOCOL, PROTOCOL_V2, assets
+from . import PROTOCOL, PROTOCOL_V2, PROTOCOL_V3, assets
 from .codec import canonical, read_json, sha, timestamp, utcnow
 from .errors import require
 from .protocol_v2 import document_hash, work_id
@@ -33,13 +33,15 @@ def version(record, package, number="1", summary="Initial submission"):
     return {"version": number, "content_hash": record["paper_id"], "received_at": record["received_at"],
             "source_issue_id": record["source_issue_id"], "source_issue_number": record["source_issue_number"],
             "protocol": package["protocol"], "document_hash": document_hash(record["paper_sha256"], package.get("assets", [])),
-            "change_summary": summary}
+            "change_summary": summary,
+            **({"author_homepages": package["author_homepages"]} if package["protocol"] == PROTOCOL_V3 else {})}
 
 
 def new_work(wid, record, package):
     return {"work_id": wid, "repository_id": record["repository_id"], "owner_id": record["submitter_id"],
             "created_at": record["received_at"], "root_issue_id": record["source_issue_id"],
-            "root_issue_number": record["source_issue_number"], "versions": [version(record, package)]}
+            "root_issue_number": record["source_issue_number"], "versions": [version(record, package)],
+            **({"discussion_kind": "pull_request"} if package["protocol"] == PROTOCOL_V3 else {})}
 
 
 def migrate(root):
@@ -74,9 +76,14 @@ def annotate(record, work, entry, root):
                    "discussion_url": "https://github.com/" + config["repository"] + "/issues/" + work["root_issue_number"]})
     if record["published"]:
         record["url"] = record["work_url"] + "v" + record["version"] + "/"
+    if work.get("discussion_kind") == "pull_request":
+        record["work_url"] = base + "abs/" + work["work_id"][3:] + "/"
+        record["discussion_url"] = "https://github.com/" + config["repository"] + "/pull/" + work["root_issue_number"]
+        if record["published"]:
+            record["url"] = base + "abs/" + work["work_id"][3:] + "v" + entry["version"] + "/"
 
 
-SAFE = re.compile(r"(?:papers/[0-9a-f]{64}/(?:paper\.md|metadata\.json|proof\.json)|assets/[0-9a-f]{64}\.(?:png|jpg|webp)|works/[0-9]{4}\.[0-9]{5,10}\.json|receipts/[0-9]+-[0-9]+\.json)\Z")
+SAFE = re.compile(r"(?:papers/[0-9a-f]{64}/(?:paper\.md|metadata\.json|proof\.json)|assets/[0-9a-f]{64}\.(?:png|jpg|webp)|works/[0-9]{4}\.[0-9]{5,10}\.json|receipts/[0-9]+-(?:pr-)?[0-9]+\.json)\Z")
 
 
 def _write(path, raw):
@@ -123,7 +130,7 @@ def recover(root):
 def commit(root, key, files):
     """Ordered immutable blobs, then registry and receipt; ready is written last."""
     from .archive import atomic_json
-    require(re.fullmatch(r"[0-9]+-[0-9]+", key), "unsafe_write", "Invalid transaction key.")
+    require(re.fullmatch(r"[0-9]+-(?:pr-)?[0-9]+", key), "unsafe_write", "Invalid transaction key.")
     journal = root / ".transactions" / key
     journal.mkdir(parents=True, exist_ok=False)
     manifest = []
