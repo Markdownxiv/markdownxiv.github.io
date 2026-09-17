@@ -37,7 +37,8 @@ preprints challenge --site https://kzoacn.github.io/Markdownxiv/ --root .work/ch
 
 This verifies the epoch/calibration hashes, published registry, production profile
 and current validity. `calibration_required` means the archive is paused; a test
-challenge is not a substitute. No publicly deployed site is implied by this guide.
+challenge is not a substitute. Always check the live epoch window before mining;
+the fixed examples in this repository are not current submission challenges.
 
 Create `paper.md` as exact UTF-8, and `metadata.json`, for example:
 

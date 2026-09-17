@@ -1,12 +1,13 @@
 # Deployment and recovery
 
-No remote settings, permission changes, pushes, Issue submissions or Pages
-deployments were performed while implementing this repository. During local
-deployment preparation on 2026-09-17, a measured production calibration and an
-unpublished epoch were initialized for repository ID `1374075838`. Admission
-remains closed until successful Pages publication. The commands below are for a maintainer
-to review and execute when they authorize publication. A local demo passing is
-not evidence that GitHub permissions, branch rules or Pages deployment work.
+The site was first deployed on 2026-09-17 after the maintainer authorized publication,
+logged in, and selected GitHub Actions as the Pages source. See the
+[successful deployment](https://github.com/kzoacn/Markdownxiv/actions/runs/35201761005)
+and [validation record](VALIDATION.md). The production epoch was registered only
+after successful deployment. No example paper was added to the live archive.
+The commands below document setup for another repository and recovery of this one.
+New deployments still require a real calibration and confirmed epoch publication;
+a local demo alone is not evidence that remote permissions or deployment work.
 
 ## Local validation first
 
@@ -225,7 +226,7 @@ old calibration/epoch files and verifier semantics for audit. To pause new
 submissions, deliberately set config `enabled: false` and dispatch maintain;
 accepted archive files remain intact.
 
-## Real repository smoke test (not performed here)
+## Real submission smoke test (not yet performed)
 
 Use a public test repository configured as above. Do not publish `examples/paper.md`
 as though it were a real research contribution. After explicit authorization to
@@ -250,9 +251,10 @@ create public test content:
    confirm bounded recovery uses observation time. Exercise a genuine concurrent
    maintainer commit to observe fast-forward retry behavior.
 
-These checks still require real GitHub credentials, repository settings, an actual
-Issue and an actual Pages environment. Local API mocks/bare Git remotes do not
-establish any of those outcomes.
+Initial CI, empty-site deployment, challenge publication and HTTP/CLI readback have
+now passed on this repository. A real submission Issue, its bot comment, and induced
+remote failure/recovery tests have not been exercised. Local API mocks/bare Git
+remotes do not establish those remaining outcomes.
 
 ## Official references and pinned Actions
 
@@ -279,4 +281,4 @@ Git refs API; the relevant pinned `action.yml` files were also read:
 The Pages upload composite itself pins its upload action to a complete commit.
 The selected actions use Node 24 and standard current GitHub-hosted runners;
 there is no self-hosted runner or untrusted PR deployment. Review pins deliberately
-when upgrading. CI in this delivery has not run on a real GitHub runner.
+when upgrading. The initial CI passed on a real GitHub runner using Python 3.12.14.

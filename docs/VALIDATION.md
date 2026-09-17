@@ -1,15 +1,17 @@
 # 本次验证记录
 
-环境：2026-09-17，Linux/WSL2，Python 3.12.3，AMD Ryzen 7 8845H。
-所有实现和验证都在本地进行；没有创建真实投稿 Issue、运行目标仓库的 GitHub
-工作流、修改远端权限/可见性/环境、向项目远端推送或公开发布论文。
+本地环境：2026-09-17，Linux/WSL2，Python 3.12.3，AMD Ryzen 7 8845H。
+初次实现先完成本地验证；随后经用户授权，已推送到目标仓库并成功部署 GitHub Pages。
+真实 GitHub CI 使用 Python 3.12.14。没有创建真实投稿 Issue 或公开发布演示论文，
+也没有修改仓库可见性、分支保护或用户已配置好的部署环境规则。
 
 ## 已实际运行
 
 * 使用 `requirements.lock` 的固定版本和 wheel SHA-256 强制重新安装全部 Python
   依赖；随后 `pip check` 返回 `No broken requirements found`。项目使用本地可编辑安装。
-* `python -m unittest discover -s tests -v`：**66 项全部通过，最终完整运行耗时
-  31.604 秒**。覆盖协议、PoW、数学证书、生产配置、
+* `python -m unittest discover -s tests -v`：发布前补充 Git 原始字节保留配置和
+  CRLF 回归用例后，**67 项全部通过，本地完整运行耗时 26.495 秒**。
+  覆盖协议、PoW、数学证书、生产配置、
   原始事件、回执、并发、API mock、本地 Git 事务、HTML 安全、公式和建站测试。
   没有在 CI 测试中挖生产 PoW 或求生产规模题。
 * `python examples/local_demo.py --out .demo`：所有实际 CLI 阶段跑通，包含
@@ -59,15 +61,11 @@ actionlint -shellcheck= \
 安装/平台命令，不包含 Issue 文本插值。页面使用原生 MathML，已检查生成内容，
 没有进行真实浏览器截图、移动设备或跨浏览器视觉回归。
 
-## 还需要真实 GitHub 环境的验证
+## 仍未完成的线上验证
 
-1. 仓库当前可见性、组织 Actions 策略、GITHUB_TOKEN 实际权限、分支规则及
-   `github-pages` environment 是否允许自动写入和部署。
-2. 真实 `issues: opened` 快照、队列容量/调度、artifact 传递、当前官方 Action
-   在 GitHub-hosted runner 上的组合行为，以及失败 job 重跑的实际表现。
-3. 首次挑战 Pages 发布/登记、一次真实生产投稿、机器人回执、Pages URL/CDN
-   可访问性以及网站项目子路径。
-4. GitHub API 实际限流、真实网络故障、遗漏事件补扫和部署失败恢复。
+1. 一次真实生产投稿的 `issues: opened` 快照、正式归档和机器人 Issue 回执。
+2. 队列容量/丢失事件、失败 job 重跑、限流、网络故障和部署失败恢复的真实故障演练。
+3. 跨浏览器与移动设备视觉检查，以及 PoA 的 Agent 能力区分度实验。
 
 这些内容的可执行 smoke test 步骤位于 [DEPLOYMENT.md](DEPLOYMENT.md)。本地
 mock、模拟发布上下文、静态 YAML 检查都不能代替这些线上验收。上述初次交付时，
@@ -77,14 +75,35 @@ mock、模拟发布上下文、静态 YAML 检查都不能代替这些线上验�
 
 用户提出部署后，通过公开 GitHub API 确认 `kzoacn/Markdownxiv` 是公开仓库，
 Issues 已启用，默认分支为 `main`，仓库 ID 为 `1374075838`。官方 GitHub CLI
-2.101.0 已经校验 release checksum 后放入 `.work/tools/gh`；当前尚未登录。
+2.101.0 校验 release checksum 后放入 `.work/tools/gh`；该准备阶段尚未登录。
 
 在同一 CPU、Python 实现和单线程条件下，为部署重新完成 15 秒真实标定：
 57,458,688 次尝试、15,000,341,114 ns。生产标定 ID 为
 `bda1d4f84171e5860d5878b1bd3cc997ee6a452ed64a636d8043684eff7cffc4`，
 原始字节位于 `challenges/calibrations/`。已在本地绑定实际仓库 ID、启用生产配置并
-生成 `2026-09-17` epoch，但 registry 中 `published_at` 仍为 null，正式验证会返回
+生成 `2026-09-17` epoch。当时 registry 中 `published_at` 为 null，正式验证会返回
 `epoch_unpublished`。没有改成测试难度，也没有伪造 Pages 成功记录。
 
-本阶段仍未提交到项目远端、修改远端设置或公开发布，等待用户完成 GitHub 登录与
-Pages source 设置后继续真正部署。
+该准备阶段未提交到项目远端、修改远端设置或公开发布；用户随后完成 GitHub 登录
+和 Pages source 设置，才进行了下面记录的实际部署。
+
+## 实际首次部署（2026-09-17）
+
+* 实现提交：`ac4e144744d7b0da53e634b19d563fca7e96a3d4`。
+* [真实 CI 运行](https://github.com/kzoacn/Markdownxiv/actions/runs/35201763330)：
+  Python 3.12.14，67 项测试在 2.786 秒内通过，CLI 完整演示及静态构建也通过。
+* [真实部署运行](https://github.com/kzoacn/Markdownxiv/actions/runs/35201761005)：
+  validate、archive、build、deploy、receipt 五个 job 全部成功。GitHub 实际接受了
+  `queue: max` 配置，官方 Action 的 artifact 上传、下载及 Pages 部署组合已跑通。
+* `GITHUB_TOKEN` 在 main 写入发布登记提交
+  `9b31487d3d700a20bea2282bd847fb03fe0a4d95`；环境只允许 main，无人工审核。
+  本次没有 Issue 回执需要发送，因此不能据此声称已验证真实评论 API 写入。
+* 首期 epoch 的 `published_at` 为 `2026-09-17T08:50:08Z`，发布完成登记时间为
+  `2026-09-17T08:50:42Z`。挑战 ID、盐、target 及原始文件哈希保持不变。
+* [公网站点](https://kzoacn.github.io/Markdownxiv/)及其 CSS、JS、挑战页、指南、协议、
+  索引、生产配置、latest、registry、schema 和 manifest 共 12 个入口实际返回 HTTP 200。
+  原始 epoch SHA-256 与 latest/registry 一致，生产 profile 和实际仓库 ID 也已核对。
+* `preprints challenge --site https://kzoacn.github.io/Markdownxiv/ --root .work/live-challenge`
+  实际下载并校验了生产挑战及标定。论文索引为空，未收录或发布示例论文。
+
+以上是真实部署记录；前文的生产证明 fixture 仍然只是离线测试数据。
