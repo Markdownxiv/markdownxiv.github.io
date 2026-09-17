@@ -47,6 +47,16 @@ def main():
         number = "2" if revision else "1"
         prefix = work / number
         prefix.mkdir(exist_ok=True)
+        receipt_path = root / "receipts" / ("1-" + number + ".json")
+        if receipt_path.exists() and read_json(receipt_path)["archived"]:
+            receipt = read_json(receipt_path)
+            # Restore that immutable version's local bytes before replaying its
+            # sealed request. In particular, do not rebase v2 onto itself.
+            (work / "paper.md").write_bytes((root / "papers" / receipt["paper_id"] / "paper.md").read_bytes())
+            print("Reusing completed development request " + number, flush=True)
+            run("archive-demo", "--root", root, "--package", prefix / "issue.md", "--paper", work / "paper.md",
+                "--issue-id", number, "--issue-number", number)
+            continue
         extra = []
         if revision:
             registry = read_json(next((root / "works").glob("*.json")))

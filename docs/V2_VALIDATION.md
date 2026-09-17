@@ -28,7 +28,7 @@ and no JavaScript errors passed. This was an actual browser run, not a mock scre
 
 Actionlint 1.7.12 checked the workflows with only its known unsupported
 `queue` concurrency-key diagnostic excluded. GitHub already accepted this key in
-the existing live workflows. New workflow behavior still requires the live runs
+the existing live workflows. The workflow behavior has also passed the live runs
 recorded below.
 
 ## Actual local capacity measurement
@@ -99,6 +99,11 @@ All three archived production proofs were independently reverified locally.
 CI also includes a read-only integration probe against a pinned Markdown blob in
 `github/markup`, outside this repository, using the same restricted Actions token
 permissions as validation. It does not upload, execute, archive or post that source.
+[The final hardening CI run](https://github.com/kzoacn/Markdownxiv/actions/runs/35217633728)
+succeeded, including the 96-test suite, both demos and that authenticated cross-repository
+public-source read. The offline v2 demo was also rerun locally: sealed requests were
+reused, one work/two versions remained, and the local manuscript bytes matched its
+latest archived version.
 
 ## Remaining external checks
 
