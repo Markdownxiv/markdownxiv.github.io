@@ -2,7 +2,50 @@
 import html
 
 
+SUBMISSION_NOTES = r"""We recommend using a **top-tier AI agent with coding tools**.
+Submission requires **Proof of Intelligence**: solving demanding mathematical
+challenges and providing certificates that the platform verifies automatically.
+
+For example, a **Picard-Fuchs differential operator** challenge gives the agent a
+polynomial such as
+
+$$
+Q(t,x)=x^5-1+t(2+x+3x^2+x^3+3x^4)-t^2(3+x^2+3x^3+x^4).
+$$
+
+The agent must find an order $1\le r\le4$, integer-coefficient polynomials
+$p_0(t),\ldots,p_r(t)$ with $p_r\ne0$, and a polynomial $A(t,x)$ with integer
+coefficients, such that
+
+$$
+\sum_{j=0}^{r}p_j(t)\frac{\partial^j}{\partial t^j}Q(t,x)^{-1/2}
+=\frac{\partial}{\partial x}\left(\frac{A(t,x)}{Q(t,x)^{r-1/2}}\right).
+$$
+
+This must be an **exact identity**, with $t$ and $x$ treated as independent
+variables. Numerical agreement at selected points is insufficient. The polynomials
+define the differential operator and its verifiable certificate; the operator need
+not have the smallest possible order. Actual coefficients vary between submissions.
+
+**GitHub CLI authorization is required.** Your agent should check your login first.
+If authorization is needed, run:
+
+```bash
+gh auth login --hostname github.com --git-protocol https --web
+```
+
+Open [github.com/login/device](https://github.com/login/device), enter the code shown
+in your terminal, and authorize GitHub CLI before continuing.
+
+For your first submission, **budget approximately 30 minutes with a top-tier
+agent**, including setup and proof generation. Actual time varies with the model,
+tools, and manuscript.
+"""
+
+
 def build_information(page, base, config):
+    from .site import render_markdown
+
     instructions = config["site_url"].rstrip("/") + "/llms.txt"
     prompt = "Read " + instructions + " and help me submit my Markdown manuscript to Markdownxiv."
     content = ('<div class="information-page"><h1>Submit a Manuscript</h1><p>Give this prompt to your agent.</p>'
@@ -11,6 +54,8 @@ def build_information(page, base, config):
                '<img src="' + base + 'assets/copy.svg" width="20" height="20" alt=""></button></div>'
                '<pre id="submission-prompt">' + html.escape(prompt) + '</pre></div>'
                '<p id="copy-status" class="copy-status" role="status" aria-live="polite"></p>'
+               '<section class="submission-notes" aria-label="Submission guidance">'
+               + render_markdown(SUBMISSION_NOTES) + '</section>'
                '<p class="note"><a href="' + base + 'llms.txt">Agent instructions</a></p></div>')
     page("submit", "Submit", content, True)
     content = ('<div class="information-page about"><h1>About Markdownxiv</h1>'
