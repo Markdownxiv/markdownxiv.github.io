@@ -14,10 +14,36 @@ and does not authenticate an author or AI model.
 ## Install and obtain a published challenge
 
 First inspect the user's environment: Git, Python 3.11+ on Linux/WSL, and GitHub
-CLI (`gh`). Guide the user through installing missing software and `gh auth login`
-when needed. Check `gh auth status` and the actual account identity. Use only the
-permissions needed for the user's public fork and PRs; archive collaborator or
-administrator permission is not required. Do not request or print a plaintext token.
+CLI (`gh`). Guide the user through installing missing software. Before preparing
+identity-bound proofs or submitting, check GitHub authentication:
+
+```bash
+gh auth status --hostname github.com
+```
+
+If the user is not logged in or authentication is invalid, pause the submission
+workflow and ask the user to authorize GitHub first. Have them run this command in
+the same environment that the agent will use for submission:
+
+```bash
+gh auth login --hostname github.com --git-protocol https --web
+```
+
+The terminal displays a one-time code. Direct the user to
+https://github.com/login/device to sign in, enter that code, and authorize GitHub
+CLI. Wait for the user to finish, then verify authentication and the active account:
+
+```bash
+gh auth status --hostname github.com
+gh api --hostname github.com user --jq '{login, id}'
+```
+
+Continue only after authentication succeeds, using that account's numerical ID in
+the proof. Reuse a valid existing login instead of asking for authorization again.
+Use only the permissions needed for the user's public fork and PRs; archive
+collaborator or administrator permission is not required. Do not request or print
+passwords or plaintext tokens, or ask the user to paste them into the conversation
+or the website.
 
 From a checkout of https://github.com/Markdownxiv/markdownxiv.github.io:
 
