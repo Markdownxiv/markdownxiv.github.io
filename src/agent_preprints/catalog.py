@@ -9,6 +9,7 @@ from .envelope import ai_label
 from .errors import Rejection, require
 from .github import user_identity
 from .protocol_v3 import homepage
+from .reader import contents, math_stylesheet
 from .site_papers import discussion
 
 PAGE_SIZE = 50
@@ -110,15 +111,22 @@ def build_catalog(root, output, base, page, render, config, social=None):
         abstract_url = base + "abs/" + version_id + "/"
         raw_url = base + "md/" + version_id + ".md"
         discussion_url = "https://github.com/" + config["repository"] + ("/pull/" if work.get("discussion_kind") == "pull_request" else "/issues/") + work["root_issue_number"]
-        reader = ('<div class="reader"><div class="reader-heading"><p class="identifier">'
-                  + esc(work["work_id"] + 'v' + number) + ' / ' + esc(version["received_at"][:10]) + '</p>'
-                  + '<p class="authors">' + author_html(meta["authors"], links) + '</p>'
+        document = render(body.decode("utf-8"), image_urls)
+        math_css = math_stylesheet(document, output, base)
+        outline = contents(document["headings"])
+        title = '' if document["has_title"] else ('<h1>' + esc(meta["title"]) + '</h1><p class="authors">' + author_html(meta["authors"], links) + '</p>')
+        reader = ('<div class="reader-layout' + ('' if outline else ' no-outline') + '">'
+                  + outline + '<div class="reader"><div class="reader-heading"><p class="identifier">'
+                  + esc(work["work_id"] + 'v' + number) + ' <span aria-hidden="true">/</span> <time>' + esc(version["received_at"][:10]) + '</time></p>'
                   + '<nav class="reader-links" aria-label="Manuscript views"><a href="' + abstract_url + '">Abstract</a>'
                   + '<a href="' + raw_url + '">Raw Markdown</a><a href="' + esc(discussion_url, quote=True) + '">Discussion</a>'
-                  + '<a href="' + base + 'md/' + wid + '/">Latest version</a></nav></div>'
-                  + '<article class="manuscript">' + render(body.decode("utf-8"), image_urls) + '</article></div>')
+                  + '<a href="' + base + 'md/' + wid + '/">Latest version</a>'
+                  + '<button class="reader-print icon-button" type="button" title="Print manuscript" aria-label="Print manuscript" hidden>'
+                  + '<img src="' + base + 'assets/print.svg" width="18" height="18" alt=""></button></nav></div>'
+                  + '<article class="manuscript" id="manuscript">' + title + document["html"] + '</article>'
+                  + '<a class="reader-top" href="#manuscript">Back to top</a></div></div>')
         for route in ["md/" + version_id] + (["md/" + wid] if latest else []):
-            page(route, meta["title"], reader)
+            page(route, meta["title"], reader, reader=True, math_css=math_css)
         subjects = ', '.join('<a href="' + base + 'categories/' + esc(c) + '/">' + esc(c) + '</a>' for c in [meta.get("primary_category"), *meta.get("secondary_categories", [])] if c)
         submitted_by = esc('@' + submitter["login"] if submitter["login"] else 'GitHub user ' + submitter["github_id"])
         if submitter["profile_url"]:

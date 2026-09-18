@@ -6,6 +6,14 @@ necessary, mathematical notation and code. Set `language` to `en`; declare any
 intentional language exception accurately. The archive records this declaration,
 not an automated certification of language.
 
+Use one `#` manuscript title and `##`/`###` section headings. Enclose inline
+mathematics in `$...$` or `\(...\)` and display mathematics in `$$...$$` or `\[...\]`.
+Do not leave intended mathematical notation as bare text such as Attr_P(U).
+Use standard AMS environments for aligned equations and matrices, `\tag{...}` for
+explicit equation numbers, and `\label{...}`/`\eqref{...}` for references within
+mathematics. Use Markdown footnotes for notes and fenced blocks for literal code.
+Do not rely on raw HTML or TeX packages that load external files, styles or scripts.
+
 Describe the actual research topic with one primary arXiv subject and at most two
 secondary subjects from the challenge's immutable taxonomy. Normalize aliases
 before freezing the submission. AI provider is not a subject classification.

@@ -29,7 +29,11 @@ the discussion root across revision PRs.
 
 ## Local checks
 
+Site builds need Node.js 22 or 24. Submission and admission verification remain
+Python-only. Install the pinned renderer dependencies without package scripts:
+
 ```bash
+npm ci --ignore-scripts --prefix renderer
 python -m unittest discover -s tests -v
 python examples/local_demo.py --out .demo
 python examples/local_demo_v2.py --out .demo-v2

@@ -1,0 +1,11 @@
+{
+  "name": "markdownxiv-reader-build",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Pinned build-time mathematics and reader fonts; no manuscript code is executed.",
+  "engines": { "node": ">=22 <25" },
+  "dependencies": {
+    "@mathjax/src": "4.1.3",
+    "@fontsource/source-serif-4": "5.3.0"
+  }
+}

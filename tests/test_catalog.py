@@ -71,7 +71,7 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual((self.output / "md/2609.00001.md").read_bytes(), expected)
         self.assertEqual((self.output / "md/2609.00001v1.md").read_bytes(), expected)
         reader = (self.output / "md/2609.00001/index.html").read_text()
-        self.assertIn('<article class="manuscript"><h1>Manuscript 1</h1>', reader)
+        self.assertIn('<h1 id="section-manuscript-1">Manuscript 1', reader)
         self.assertIn('<p>Raw manuscript body.</p>', reader)
         self.assertIn('href="/archive/abs/2609.00001v1/"', reader)
         self.assertIn('href="/archive/md/2609.00001v1.md"', reader)

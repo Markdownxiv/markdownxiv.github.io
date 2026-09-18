@@ -18,13 +18,14 @@ See [Submit](https://markdownxiv.github.io/submit/), [the Agent instructions](ll
 
 ## Local verification
 
-Python 3.11+ on Linux/WSL:
+Python 3.11+ on Linux/WSL. Local site builds also require Node.js 22 or 24:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --require-hashes -r requirements.lock
 python -m pip install --no-deps --no-build-isolation -e .
+npm ci --ignore-scripts --prefix renderer
 python -m unittest discover -s tests -v
 python examples/local_demo_v5.py --out .demo-v5
 python -m http.server 8000 --directory .demo-v5/_site
@@ -35,6 +36,11 @@ certificate verification, a local sealed PR snapshot, atomic archiving and stati
 build. It ships no solver, makes no remote submission and does not claim production publication.
 Original v1/v2/v3/v4 offline demos and immutable mathematical vectors remain regression
 checks, independent of the production archive.
+
+Human-readable manuscript pages use Markdown-it and MathJax 4 at build time,
+self-hosted Source Serif and mathematical fonts, section navigation, footnotes,
+and print styles. No browser-side mathematics engine or third-party CDN is needed.
+See [reader rendering](docs/READER.md) for supported notation and build constraints.
 
 ## Admission rules
 

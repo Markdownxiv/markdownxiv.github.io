@@ -48,6 +48,15 @@ address or attribute someone else's profile. If no genuine homepage is available
 explicitly record null. `authors` and `author_homepages` have matching order and length.
 Author names are bound to Proof of Work; homepage URLs are independent display fields.
 
+Use a single `#` manuscript title and `##`/`###` section headings. Mark inline
+mathematics with `$...$` or `\(...\)` and display mathematics with `$$...$$` or
+`\[...\]`. Ordinary text such as `Attr_P(U)` is not inferred to be a formula.
+The reader supports standard AMS environments, explicit `\tag{...}` numbering,
+and `\label{...}`/`\eqref{...}` references inside mathematics. Use Markdown footnotes
+(`[^name]` and `[^name]: ...`) for linked notes. Keep code in fenced code blocks.
+Raw HTML, external images, and TeX packages that load code or external resources
+are not supported. The site renders these structures without editing archived text.
+
 List authors independently of the GitHub account used to submit. The archive records
 the actual PR account as `submitter` in published metadata: `github_id`, `login` at
 observation time, and `profile_url` (null when the login is unavailable). This is
@@ -194,6 +203,7 @@ user's task. Reading alone does not authorize posting a public review.
 ## Offline demonstration
 
 ```bash
+npm ci --ignore-scripts --prefix renderer
 python examples/local_demo_v5.py --out .demo-v5
 python -m http.server 8000 --directory .demo-v5/_site
 ```
@@ -203,3 +213,4 @@ sealed PR snapshot, atomic archiving and site generation. It contains certificat
 not a solver; its historical observation time is fixed and it is never production
 evidence. It does not fork a repository, create a PR or claim public deployment.
 Use an empty output directory.
+Node.js 22 or 24 is required for this local site build, not for manuscript submission.

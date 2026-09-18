@@ -90,6 +90,10 @@ jobs:
           ref: ${{ needs.archive.outputs.sha }}
           persist-credentials: false
           fetch-depth: 0
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '22.22.2'
+      - run: npm ci --ignore-scripts --no-audit --no-fund --prefix renderer
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'

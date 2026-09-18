@@ -48,7 +48,7 @@ def mathml(expression, options):
         return "<code>" + html.escape(expression) + "</code>"
 
 
-def render_markdown(text, image_urls=None, link_base=None):
+def markdown_parser(image_urls=None, link_base=None):
     from markdown_it import MarkdownIt
     from mdit_py_plugins.dollarmath import dollarmath_plugin
     md = MarkdownIt("commonmark", {"html": False, "maxNesting": 24, "linkify": False})
@@ -80,7 +80,11 @@ def render_markdown(text, image_urls=None, link_base=None):
             return '<img loading="lazy" decoding="async" src="' + address + '" alt="' + html.escape(token.content, quote=True) + '">'
         return "<span class=\"image-alt\">[image omitted: " + html.escape(token.content) + "]</span>"
     md.renderer.rules["image"] = image
-    return md.render(text)
+    return md
+
+
+def render_markdown(text, image_urls=None, link_base=None):
+    return markdown_parser(image_urls, link_base).render(text)
 
 
 def _render_worker(connection, text, image_urls, link_base):
@@ -122,7 +126,7 @@ def system_update(root):
     if not (root / ".git").exists():
         return None
     # Archive records, rotating challenges and deployment receipts are not system releases.
-    paths = ("src", "site", "config", ".github/workflows", "schemas", "taxonomy", "prompts",
+    paths = ("src", "site", "renderer", "config", ".github/workflows", "schemas", "taxonomy", "prompts",
              "docs", "agent-guide.md", "llms.txt", "pyproject.toml", "requirements.lock")
     try:
         def git(*args):
@@ -137,15 +141,18 @@ def system_update(root):
         return None
 
 
-def _page(title, content, base, script=False, footer_extra=""):
+def _page(title, content, base, script=False, footer_extra="", reader=False, math_css=None):
     esc = html.escape
     return ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
             "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'self'; "
-            "script-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'\">"
+            "script-src 'self'; connect-src 'self'; img-src 'self'; font-src 'self'; base-uri 'none'; form-action 'self'\">"
             f"<title>{esc(title)} · Markdownxiv</title><link rel=\"stylesheet\" href=\"{base}assets/style.css\">"
             + (f"<script src=\"{base}assets/search.js\" defer></script>" if script else "") +
-            f'<link rel="icon" href="{base}assets/mark.svg" type="image/svg+xml"></head><body>'
+            (f'<link rel="stylesheet" href="{base}assets/reader-fonts.css">'
+             + (f'<link rel="stylesheet" href="{esc(math_css, quote=True)}">' if math_css else '')
+             + f'<link rel="stylesheet" href="{base}assets/reader.css"><script src="{base}assets/reader.js" defer></script>' if reader else '') +
+            f'<link rel="icon" href="{base}assets/mark.svg" type="image/svg+xml"></head><body' + (' class="reader-page"' if reader else '') + '>'
             '<a class="skip-link" href="#content">Skip to content</a><header><div class="header-inner">'
             f'<a class="brand" href="{base}"><img src="{base}assets/mark.svg" width="38" height="38" alt="">Markdownxiv</a>'
             f'<form class="archive-search" role="search" action="{base}search/" method="get"><label class="sr-only" for="global-search">Search archive</label>'
@@ -184,14 +191,16 @@ def build(root, output, base_path=None, now=None, social=None):
     home_footer = (f'<div class="system-footer"><a href="{repository_url}">GitHub</a>'
                    f'<span>{updated_label}</span></div>')
     entries = []
-    def page(path, title, content, script=False):
+    def page(path, title, content, script=False, reader=False, math_css=None):
         target = output / path / "index.html"
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(_page(title, content, base, script, home_footer if path == "" else ""), encoding="utf-8")
+        target.write_text(_page(title, content, base, script, home_footer if path == "" else "", reader, math_css), encoding="utf-8")
     from . import PR_PROTOCOLS
     if config.get("protocol") in PR_PROTOCOLS:
         from .catalog import build_catalog
-        paper_ids = build_catalog(root, output, base, page, safe_render, config, social)
+        from .reader import install_assets, render_reader
+        install_assets(output)
+        paper_ids = build_catalog(root, output, base, page, render_reader, config, social)
     else:
         from .site_papers import build_papers
         paper_ids = build_papers(root, output, base, page, safe_render, config, social)

@@ -66,8 +66,8 @@ class ReaderTests(unittest.TestCase):
                                 "change_summary": "Update the text."})
         output = self.root / "_site"
         build(self.root, output, "/", NOW)
-        self.assertIn("<h1>Second Version</h1>", (output / "md/2609.00001/index.html").read_text())
-        self.assertIn("<h1>First Version</h1>", (output / "md/2609.00001v1/index.html").read_text())
+        self.assertIn('<h1 id="section-second-version">Second Version', (output / "md/2609.00001/index.html").read_text())
+        self.assertIn('<h1 id="section-first-version">First Version', (output / "md/2609.00001v1/index.html").read_text())
         self.assertEqual((output / "md/2609.00001v1.md").read_bytes(), old)
         self.assertEqual((output / "md/2609.00001.md").read_bytes(), new)
         self.assertEqual((output / "md/2609.00001v2.md").read_bytes(), new)
@@ -76,8 +76,8 @@ class ReaderTests(unittest.TestCase):
         body = b"# A Manuscript\n\nRaw text.\n"
         self.archive(body)
         output = self.root / "_site"
-        with patch("agent_preprints.site.safe_render", return_value="<pre>Escaped fallback text</pre>"):
+        with patch("agent_preprints.reader.render_reader", return_value={"html": "<pre>Escaped fallback text</pre>", "headings": [], "has_title": False, "css": ""}):
             build(self.root, output, "/", NOW)
         page = (output / "md/2609.00001/index.html").read_text()
-        self.assertIn('<article class="manuscript"><pre>Escaped fallback text</pre>', page)
+        self.assertIn('<pre>Escaped fallback text</pre>', page)
         self.assertEqual((output / "md/2609.00001.md").read_bytes(), body)

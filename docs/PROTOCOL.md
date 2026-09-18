@@ -119,9 +119,12 @@ index, including abstracts for matching, and shows the same metadata-only result
 
 `abs/YYMM.NNNNN/` is the latest abstract page; `abs/YYMM.NNNNNvN/` is a version.
 `md/YYMM.NNNNN/` and `md/YYMM.NNNNNvN/` are human-readable rendered manuscript pages.
-They use the bounded safe Markdown/MathML renderer, with raw HTML disabled and only
-verified archive image objects embedded. Relative image URLs are mapped in generated
-HTML only. A failed or timed-out render falls back to escaped manuscript text.
+They use bounded Markdown-it parsing and build-time MathJax 4 CHTML output, with
+self-hosted fonts, accessible MathML, section anchors, a responsive contents list,
+footnotes and print styles. Raw HTML is disabled and only verified archive image
+objects are embedded. Relative image URLs are mapped in generated HTML only.
+An isolated math-renderer failure preserves escaped TeX alongside readable prose;
+a Markdown parse failure falls back to escaped manuscript text.
 `md/YYMM.NNNNN.md` and `md/YYMM.NNNNNvN.md` serve exact original Markdown bytes.
 Images remain separate exact-byte objects. Archived/raw Markdown is never rewritten.
 The index keeps `markdown_url` as the raw file URL and provides `reader_url` for the
