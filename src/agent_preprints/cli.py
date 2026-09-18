@@ -7,13 +7,13 @@ import time
 import urllib.request
 from pathlib import Path
 
-from . import poa, pow, PROTOCOL_V2, PROTOCOL_V3, PROTOCOL_V4, PR_PROTOCOLS
+from . import poa, poi, pow, PROTOCOL_V2, PROTOCOL_V3, PROTOCOL_V4, PROTOCOL_V5, PR_PROTOCOLS
 from .archive import capture, process, public_receipt
 from .codec import MAX_PAPER, canonical, loads, read_json, sha, utcnow, write_json
 from .epochs import epoch_path, initialize, load_epoch, rotate, validate_epoch
 from .errors import Rejection, require
 from .github import GitHub, NoRedirect, bounded_read, repository_name, wall_timeout
-from .protocol import Context, pr_protocol, prepare, verify, verify_pow
+from .protocol import Context, pr_protocol, prepare, read_package, verify, verify_pow
 from .site import build, site_address
 
 
@@ -30,7 +30,7 @@ def _local_assets(args, package):
     directory = getattr(args, "assets_dir", None)
     if directory is None and getattr(args, "paper", None):
         directory = Path(args.paper).parent
-    cap = pr_protocol(package["protocol"]).MAX_MATERIAL if package["protocol"] == PROTOCOL_V4 else MAX_IMAGE
+    cap = pr_protocol(package["protocol"]).MAX_MATERIAL if package["protocol"] in (PROTOCOL_V4, PROTOCOL_V5) else MAX_IMAGE
     return ({e["path"]: read_local(directory, e["path"], cap) for e in package.get("assets", [])}
             if directory is not None else None)
 
@@ -112,12 +112,12 @@ def parser():
     cmd.add_argument("--repository", required=True)
     cmd.add_argument("--repository-id", required=True)
     cmd.add_argument("--site-url", required=True)
-    cmd.add_argument("--protocol", choices=("v1", "v2", "v3", "v4"), default="v4")
+    cmd.add_argument("--protocol", choices=("v1", "v2", "v3", "v4", "v5"), default="v5")
     cmd = sub.add_parser("rotate")
     cmd.add_argument("--root", default=".")
     cmd.add_argument("--dev", action="store_true")
     cmd.add_argument("--repository-id", default="1")
-    cmd.add_argument("--protocol", choices=("v1", "v2", "v3", "v4"), help="Choose a development protocol; current submissions use v4")
+    cmd.add_argument("--protocol", choices=("v1", "v2", "v3", "v4", "v5"), help="Choose a development protocol; current submissions use v5")
     cmd = sub.add_parser("challenge")
     cmd.add_argument("--root", default=".")
     cmd.add_argument("--site")
@@ -155,6 +155,8 @@ def parser():
         cmd.add_argument("--dev", action="store_true")
         if name in ("pow", "questions", "pack"):
             cmd.add_argument("--out", required=True)
+        if name == "questions":
+            cmd.add_argument("--markdown", help="Write English WitnessBench problem statements alongside the JSON")
         if name == "pow":
             cmd.add_argument("--checkpoint", required=True)
             cmd.add_argument("--max-seconds", type=float)
@@ -224,9 +226,9 @@ def execute(args):
     elif command == "format-pr":
         from .pr_client import format_pr
         from .protocol import validate_package
-        package = read_json(args.package, 60000)
+        package = read_package(args.package)
         validate_package(package)
-        require(package["protocol"] in PR_PROTOCOLS, "protocol_version", "PR formatting requires a v3 or v4 package.")
+        require(package["protocol"] in PR_PROTOCOLS, "protocol_version", "PR formatting requires a supported PR package.")
         Path(args.out).write_text(format_pr(package), encoding="utf-8")
         _emit({"status": "formatted", "bytes": str(Path(args.out).stat().st_size)})
     elif command == "work":
@@ -259,7 +261,7 @@ def execute(args):
         kwargs = {}
         if epoch["protocol"] in (PROTOCOL_V2, *PR_PROTOCOLS):
             from . import assets, taxonomy
-            limits = {"max_image": 8_000_000, "max_total": 8_000_000} if epoch["protocol"] == PROTOCOL_V4 else {}
+            limits = {"max_image": 8_000_000, "max_total": 8_000_000} if epoch["protocol"] in (PROTOCOL_V4, PROTOCOL_V5) else {}
             entries, _ = assets.collect_local(body, args.assets_dir or Path(args.paper).parent, **limits)
             kwargs = {"entries": entries, "asset_source": read_json(args.asset_source) if args.asset_source else None,
                       "catalog": taxonomy.load(args.root, epoch["taxonomy_hash"])}
@@ -285,7 +287,7 @@ def execute(args):
             report["material_limit"] = str(pr_protocol(epoch["protocol"]).MAX_MATERIAL)
         _emit(report)
     elif command in ("pow", "verify-pow", "questions", "pack", "verify"):
-        package = read_json(args.package, 60_000)
+        package = read_package(args.package)
         context = _client_context(package)
         if command == "pow":
             from .protocol import validate_package
@@ -308,14 +310,23 @@ def execute(args):
         elif command in ("questions", "verify-pow"):
             epoch, digest = verify_pow(package, args.root, context, not args.dev)
             if command == "questions":
-                value = {"poa_seed": pow.seed(digest).hex(), "problems": poa.sample(pow.seed(digest), epoch["poa_policy"])}
+                engine = poi if package["protocol"] == PROTOCOL_V5 else poa
+                seed = pow.seed(digest, package["protocol"])
+                value = {"poa_seed": seed.hex(), "problems": engine.sample(seed, epoch["poa_policy"])}
                 write_json(args.out, value)
+                if args.markdown:
+                    require(package["protocol"] == PROTOCOL_V5, "protocol_version", "English WitnessBench statements require v5.")
+                    Path(args.markdown).write_text(poi.markdown(value["problems"]), encoding="utf-8")
             else:
                 value = {"valid": True, "pow_hash": digest.hex()}
             _emit(value)
         else:
             if command == "pack":
-                package["answers"] = read_json(args.answers)
+                if package["protocol"] == PROTOCOL_V5:
+                    with Path(args.answers).open("rb") as stream:
+                        package["answers"] = loads(stream.read(1_000_001), 1_000_000, stringify_integers=True)
+                else:
+                    package["answers"] = read_json(args.answers)
                 if args.homepages:
                     require(package["protocol"] in PR_PROTOCOLS, "protocol_version", "Homepage display fields require a PR protocol.")
                     package["author_homepages"] = read_json(args.homepages)
@@ -345,7 +356,7 @@ def execute(args):
     elif command == "archive-pr-demo":
         from .pull_requests import capture as capture_pr
         from .protocol_v3 import metadata_file
-        package = read_json(args.package, 60_000)
+        package = read_package(args.package)
         epoch = read_json(epoch_path(args.root, package["epoch_id"]))
         require(package["protocol"] in PR_PROTOCOLS and epoch["profile"] == "development", "development_required", "This demo only accepts development PR proofs.")
         repository = "local/demo"
@@ -362,7 +373,7 @@ def execute(args):
     elif command == "submit":
         token = participant_token(required=True)
         github = GitHub(token)
-        package = read_json(args.package, 60_000)
+        package = read_package(args.package)
         require(args.paper, "body_unavailable", "PR submission requires --paper and its local image files.")
         from .pr_client import submit
         result = submit(github, args.repository, package, args.root, Path(args.paper).read_bytes(),

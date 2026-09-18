@@ -3,7 +3,7 @@ import html
 import math
 import shutil
 
-from . import PROTOCOL_V4, assets, taxonomy, works
+from . import PROTOCOL_V4, PROTOCOL_V5, assets, taxonomy, works
 from .codec import hexhash, read_json, sha, write_json
 from .envelope import ai_label
 from .errors import Rejection, require
@@ -93,7 +93,7 @@ def build_catalog(root, output, base, page, render, config, social=None):
         if latest:
             (output / "md" / (wid + ".md")).write_bytes(body)
         entries = proof["package"].get("assets", [])
-        limits = {"max_image": 8_000_000, "max_total": 8_000_000} if proof["protocol"] == PROTOCOL_V4 else {}
+        limits = {"max_image": 8_000_000, "max_total": 8_000_000} if proof["protocol"] in (PROTOCOL_V4, PROTOCOL_V5) else {}
         assets.validate_manifest(entries, **limits)
         downloads, image_urls = [], {}
         for entry in entries:

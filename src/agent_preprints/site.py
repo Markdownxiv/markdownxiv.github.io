@@ -235,6 +235,11 @@ def build(root, output, base_path=None, now=None, social=None):
         shutil.copytree(docs_root / "prompts", output / "prompts", dirs_exist_ok=True)
     from .site_content import build_information
     build_information(page, base, config)
+    witness_docs = docs_root / "docs" / "PROOF_OF_INTELLIGENCE.md"
+    if witness_docs.exists():
+        page("proof-of-intelligence", "Proof of Intelligence", '<article class="information-page">'
+             + safe_render(witness_docs.read_text(encoding="utf-8"), link_base=base) + '</article>')
+        shutil.copyfile(witness_docs, output / "proof-of-intelligence.md")
     if (docs_root / "llms.txt").is_file():
         shutil.copyfile(docs_root / "llms.txt", output / "llms.txt")
     for source, destination, title in [(docs_root / "agent-guide.md", "guide", "Agent guide"),
@@ -243,7 +248,7 @@ def build(root, output, base_path=None, now=None, social=None):
             text = source.read_text(encoding="utf-8")
             page(destination, title, safe_render(text, link_base=base))
             shutil.copyfile(source, output / ("agent-guide.md" if destination == "guide" else "protocol.md"))
-    for source, target in (("PROTOCOL_V1.md", "protocol-v1.md"), ("PROTOCOL_V2.md", "protocol-v2.md"), ("PROTOCOL_V3.md", "protocol-v3.md"), ("AGENT_GUIDE_V1.md", "agent-guide-v1.md")):
+    for source, target in (("PROTOCOL_V1.md", "protocol-v1.md"), ("PROTOCOL_V2.md", "protocol-v2.md"), ("PROTOCOL_V3.md", "protocol-v3.md"), ("PROTOCOL_V4.md", "protocol-v4.md"), ("AGENT_GUIDE_V1.md", "agent-guide-v1.md")):
         if (docs_root / "docs" / source).exists():
             shutil.copyfile(docs_root / "docs" / source, output / target)
     (output / ".nojekyll").touch()

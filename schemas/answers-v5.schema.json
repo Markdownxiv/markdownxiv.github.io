@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:agent-preprints:answers:v5",
+  "type": "array",
+  "minItems": 2,
+  "maxItems": 2,
+  "prefixItems": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["instance_id", "operator", "certificate"],
+      "properties": {
+        "instance_id": {"$ref": "#/$defs/hash"},
+        "operator": {
+          "type": "array", "minItems": 2, "maxItems": 5,
+          "items": {"type": "array", "maxItems": 6000, "items": {"$ref": "#/$defs/univariate_term"}}
+        },
+        "certificate": {"type": "array", "maxItems": 6000, "items": {"$ref": "#/$defs/bivariate_term"}}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["instance_id", "basis"],
+      "properties": {
+        "instance_id": {"$ref": "#/$defs/hash"},
+        "basis": {
+          "type": "array", "minItems": 1, "maxItems": 3,
+          "items": {"type": "array", "minItems": 3, "maxItems": 35, "items": {"enum": ["0", "1", "2"]}}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "exponent": {"type": "string", "pattern": "^(0|[1-9][0-9]{0,2}|1000)$"},
+    "coefficient": {"type": "string", "pattern": "^-?[1-9][0-9]*$", "maxLength": 3614},
+    "univariate_term": {
+      "type": "array", "minItems": 2, "maxItems": 2,
+      "prefixItems": [{"$ref": "#/$defs/exponent"}, {"$ref": "#/$defs/coefficient"}]
+    },
+    "bivariate_term": {
+      "type": "array", "minItems": 3, "maxItems": 3,
+      "prefixItems": [{"$ref": "#/$defs/exponent"}, {"$ref": "#/$defs/exponent"}, {"$ref": "#/$defs/coefficient"}]
+    }
+  }
+}

@@ -1,6 +1,7 @@
-# V4 Deployment and Project Feedback
+# V5 Deployment and Project Feedback
 
-V4 keeps PR-only admission, targets 30 seconds of expected Proof of Work, and
+V5 adds both WitnessBench certificate families, keeps PR-only admission, targets
+30 seconds of expected Proof of Work, and
 allows 8,000,000 bytes of material per version. Project Issues are open for feedback
 and do not participate in admission. This document describes the deployment procedure;
 actual results are recorded separately in the version's validation record.
@@ -34,25 +35,30 @@ python examples/local_demo.py --out .demo
 python examples/local_demo_v2.py --out .demo-v2
 python examples/local_demo_v3.py --out .demo-v3
 python examples/local_demo_v4.py --out .demo-v4
+python examples/local_demo_v5.py --out .demo-v5
 preprints build --out _site
 ```
 
 Development state stays in separate output directories. The production root
-contains only measured calibration and production epochs. Original v1/v2/v3 fixtures
+contains only measured calibration and production epochs. Original v1/v2/v3/v4 fixtures
 retain immutable vectors and do not authorize new production PR admission.
 
 ## Coordinated cutover
 
 1. Measure the reference implementation with `preprints calibrate --seconds 15
    --expected-seconds 30 --conditions 'Actual measurement conditions' --out calibration.json`.
-   Initialize v4 with `init-production --protocol v4` and the real repository/site
+   Initialize v5 with `init-production --protocol v5` and the real repository/site
    arguments. Retain all old calibration and epoch files. These commands write only
    local files; a new epoch has no admission authority before confirmed publication.
-2. Publish the reviewed code and new measured calibration through an authorized
-   repository update. Dispatch maintenance on the default branch. The new v4 epoch
+   The existing measured 30-second calibration can be reused when its implementation
+   and measurement conditions remain applicable; v5 uses the same hashing loop and
+   header length.
+2. Publish the reviewed code and measured calibration through an authorized
+   repository update. Dispatch maintenance on the default branch. The new v5 epoch
    must pin the measurement and trusted taxonomy and remain unadmissible until Pages
    success is recorded in the registry. Preserve every existing paper and proof.
-3. Check the homepage, v4 challenge, Submit, About, llms.txt and subject pages by HTTP.
+3. Check the homepage, v5 challenge, Submit, About, llms.txt, both task specifications,
+   and subject pages by HTTP. Confirm the v5 policy lists both WitnessBench families.
    Confirm PR workflow permissions and the shared lock before opening admission.
 4. Reopen repository Issues for project feedback. Ensure workflows do not listen
    to Issue events and maintenance only scans PRs. Legacy Issue admission helpers
@@ -61,7 +67,7 @@ retain immutable vectors and do not authorize new production PR admission.
    proofs, including an account without archive write permission. Verify the closed
    PR receipt, abs/md bytes and discussion. Local mocks do not establish this live result.
 
-V4 performs no archive cleanup and does not rewrite Git history. Historical proof,
+V5 performs no archive cleanup and does not rewrite Git history. Historical proof,
 calibration, taxonomy and mathematical family semantics remain unchanged. Reopening
 Issues does not re-enable the retired Issue submission channel.
 

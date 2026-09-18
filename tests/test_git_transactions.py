@@ -143,6 +143,27 @@ class GitTests(unittest.TestCase):
             GitTransaction(checkout, "main").run(mutation)
         self.assertEqual(caught.exception.code, "unsafe_write")
 
+    def test_v5_epoch_can_be_published_but_development_epochs_cannot(self):
+        from agent_preprints import PROTOCOL_V5, poi, taxonomy
+        from agent_preprints.epochs import initialize, rotate
+        from support import NOW
+        source = Path(__file__).resolve().parents[1] / "challenges/calibrations/f869e8bedc49e3a70c99ed1c9ca8374b7c269ee47f70c4536fb6a4143ed9e2a7.json"
+        initialize(self.seed, read_json(source), "test/archive", "1", "https://test.github.io/archive/", PROTOCOL_V5)
+        taxonomy.ensure(self.seed)
+        git(self.seed, "add", ".")
+        git(self.seed, "commit", "-m", "Configure v5 fixture")
+        git(self.seed, "push", "origin", "main")
+        checkout = self.clone("v5-epoch-writer")
+        tx = GitTransaction(checkout, "main")
+        commit, epoch = tx.run(lambda tree: rotate(tree, NOW))
+        self.assertEqual(epoch["poa_policy"], poi.PRODUCTION_POLICY)
+        names = git(self.remote, "diff-tree", "--no-commit-id", "--name-only", "-r", commit).splitlines()
+        self.assertIn("challenges/epochs/v5-2026-09-17.json", names)
+        with self.assertRaises(Rejection) as caught:
+            tx.run(lambda tree: rotate(tree, NOW, development=True, protocol=PROTOCOL_V5))
+        self.assertEqual(caught.exception.code, "unsafe_write")
+        self.assertEqual(git(self.remote, "rev-parse", "main"), commit)
+
     def v2_package(self, body=b"# A new v2 manuscript\n", intent=None):
         from agent_preprints import PROTOCOL_V2, taxonomy
         from agent_preprints.epochs import rotate, epoch_path

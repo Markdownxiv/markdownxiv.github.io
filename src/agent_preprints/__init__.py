@@ -8,4 +8,6 @@ PROTOCOL_V3 = "agent-preprints-v3"
 VERIFIER_V3 = "ap-verifier-v3"
 PROTOCOL_V4 = "agent-preprints-v4"
 VERIFIER_V4 = "ap-verifier-v4"
-PR_PROTOCOLS = (PROTOCOL_V3, PROTOCOL_V4)
+PROTOCOL_V5 = "agent-preprints-v5"
+VERIFIER_V5 = "ap-verifier-v5"
+PR_PROTOCOLS = (PROTOCOL_V3, PROTOCOL_V4, PROTOCOL_V5)

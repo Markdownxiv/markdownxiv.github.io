@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import PROTOCOL, VERIFIER, PROTOCOL_V2, PROTOCOL_V3, PROTOCOL_V4, PR_PROTOCOLS
+from . import PROTOCOL, VERIFIER, PROTOCOL_V2, PROTOCOL_V3, PROTOCOL_V4, PROTOCOL_V5, PR_PROTOCOLS
 from .codec import (MAX_PACKAGE, canonical, content_hash, decimal, fields, hexhash,
                     loads, metadata, paper_bytes, sha, timestamp)
 from .epochs import load_epoch
@@ -13,9 +13,21 @@ PACKAGE_FIELDS = ["protocol", "repository_id", "submitter_id", "epoch_id", "epoc
 
 
 def pr_protocol(version):
-    from . import protocol_v3, protocol_v4
-    require(version in PR_PROTOCOLS, "protocol_version", "PR submissions require protocol v3 or v4.")
-    return protocol_v4 if version == PROTOCOL_V4 else protocol_v3
+    from . import protocol_v3, protocol_v4, protocol_v5
+    require(version in PR_PROTOCOLS, "protocol_version", "Unsupported PR submission protocol.")
+    return {PROTOCOL_V3: protocol_v3, PROTOCOL_V4: protocol_v4, PROTOCOL_V5: protocol_v5}[version]
+
+
+def load_package(data):
+    package = loads(data, 1_000_000)
+    limit = pr_protocol(package["protocol"]).MAX_PACKAGE if isinstance(package, dict) and package.get("protocol") in PR_PROTOCOLS else MAX_PACKAGE
+    require(len(data) <= limit, "input_limit", "Submission exceeds its protocol's byte limit.")
+    return package
+
+
+def read_package(path):
+    with Path(path).open("rb") as stream:
+        return load_package(stream.read(1_000_001))
 
 
 @dataclass(frozen=True)

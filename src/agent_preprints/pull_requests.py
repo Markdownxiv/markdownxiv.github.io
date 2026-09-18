@@ -1,12 +1,13 @@
 """Read sealed PR commits as bounded data, never as executable checkout contents."""
 import re
 from contextlib import nullcontext
+from pathlib import Path
 
-from . import PR_PROTOCOLS
-from .codec import canonical, decimal, fields, loads, sha, utcnow
+from . import PR_PROTOCOLS, PROTOCOL_V5
+from .codec import canonical, decimal, fields, loads, read_json, sha, utcnow
 from .errors import require
 from .github import repository_name, wall_timeout
-from .protocol import Context, pr_protocol, verify, verify_pow
+from .protocol import Context, load_package, pr_protocol, verify, verify_pow
 from .protocol_v3 import metadata_file
 
 DIRECTORY = re.compile(r"submissions/[0-9a-f]{32}\Z")
@@ -79,7 +80,7 @@ def read_package(snapshot, github):
         return github.fetch_file({"kind": "github", "repository": current_repository,
                                   "commit": origin["head_sha"], "path": directory + "/" + relative},
                                  cap, image=image, data=data)
-    package = loads(get("submission.json", 60_000, data=True))
+    package = load_package(get("submission.json", 1_000_000, data=True))
     require(isinstance(package, dict), "invalid_fields", "Submission package must be an object.")
     pr_protocol(package.get("protocol")).validate_package(package)
     expected = {directory + "/" + name for name in ("paper.md", "metadata.json", "submission.json")}
@@ -100,6 +101,8 @@ def evaluate(snapshot, root, production=True, github=None, bundle=None):
             fields(bundle, ["package", "paper", "metadata", "assets"])
             package = bundle["package"]
         require(package["protocol"] in PR_PROTOCOLS, "protocol_version", "New submissions require a versioned PR package.")
+        if production and read_json(Path(root) / "config/production.json").get("protocol") == PROTOCOL_V5:
+            require(package["protocol"] == PROTOCOL_V5, "protocol_version", "New PR submissions must use the current v5 WitnessBench challenge.")
         verify_pow(package, root, context, production)
         if github is not None:
             meta = get("metadata.json", 60_000, data=True)

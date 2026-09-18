@@ -21,3 +21,10 @@ V4 uses a measured 30-second expected-work calibration and an 8,000,000-byte
 material budget. Historical versions retain their original calibration and limits.
 The current English Agent guide is llms.txt. Project Issues are feedback only;
 never add Issue-triggered admission, scanning or bot receipts.
+
+V5 production admission uses the versioned WitnessBench Picard-Fuchs and common
+isotropic families. Preserve prior proof semantics; never alter the vendored
+verifier without a new family version. Verify certificates in a bounded process.
+Keep solvers, walkthroughs and standalone answer sets out of public changes.
+Fixed development submission certificates are regression data, never production
+challenge entries. Run the v5 offline demo after admission or persistence changes.

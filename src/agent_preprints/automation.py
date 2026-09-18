@@ -56,7 +56,7 @@ class GitTransaction:
                     staged = self.git(worktree, "diff", "--cached", "--name-only", "-z").stdout.split("\0")
                     allowed = re.compile(r"(?:papers/[0-9a-f]{64}/(?:paper\.md|metadata\.json|proof\.json)|"
                                          r"receipts/[0-9]+-(?:pr-)?[0-9]+\.json|challenges/(?:latest\.json|registry\.json|"
-                                         r"epochs/(?:v[234]-)?\d{4}-\d{2}-\d{2}\.json)|state/(?:scan|published)\.json|"
+                                         r"epochs/(?:v[2345]-)?\d{4}-\d{2}-\d{2}\.json)|state/(?:scan|published)\.json|"
                                          r"works/[0-9]{4}\.[0-9]{5,10}\.json|assets/[0-9a-f]{64}\.(?:png|jpg|webp))\Z")
                     require(all(not name or allowed.fullmatch(name) for name in staged),
                             "unsafe_write", "Transaction attempted to modify a non-data path.")

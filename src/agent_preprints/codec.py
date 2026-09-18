@@ -50,7 +50,7 @@ def _check(value, depth=0, budget=None):
         raise Rejection("invalid_json", "Unsupported JSON type.")
 
 
-def loads(data, limit=MAX_PACKAGE):
+def loads(data, limit=MAX_PACKAGE, *, stringify_integers=False):
     if isinstance(data, str):
         try:
             data = data.encode("utf-8")
@@ -59,7 +59,7 @@ def loads(data, limit=MAX_PACKAGE):
     require(isinstance(data, bytes) and len(data) <= limit, "input_limit", "JSON byte limit exceeded.")
     try:
         value = json.loads(data.decode("utf-8"), object_pairs_hook=_pairs,
-                           parse_int=_bad_number, parse_float=_bad_number,
+                           parse_int=str if stringify_integers else _bad_number, parse_float=_bad_number,
                            parse_constant=_bad_number)
         _check(value)
         return value
