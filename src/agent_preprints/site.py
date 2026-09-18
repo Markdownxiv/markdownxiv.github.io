@@ -3,8 +3,10 @@ import html
 import multiprocessing
 import re
 import shutil
+import subprocess
 import urllib.parse
 import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .codec import canonical, hexhash, read_json, sha, timestamp, utcnow, write_json
@@ -115,7 +117,27 @@ def safe_render(text, image_urls=None, link_base=None):
         parent.close()
 
 
-def _page(title, content, base, script=False):
+def system_update(root):
+    root = Path(root)
+    if not (root / ".git").exists():
+        return None
+    # Archive records, rotating challenges and deployment receipts are not system releases.
+    paths = ("src", "site", "config", ".github/workflows", "schemas", "taxonomy", "prompts",
+             "docs", "agent-guide.md", "llms.txt", "pyproject.toml", "requirements.lock")
+    try:
+        def git(*args):
+            return subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True,
+                                  text=True, timeout=10).stdout.strip()
+        if git("rev-parse", "--is-shallow-repository") != "false":
+            return None
+        revision, date = git("log", "-1", "--first-parent", "--format=%H%n%cI", "--", *paths).splitlines()
+        updated = datetime.fromisoformat(date).astimezone(timezone.utc)
+        return revision, updated
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+
+
+def _page(title, content, base, script=False, footer_extra=""):
     esc = html.escape
     return ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
@@ -130,7 +152,8 @@ def _page(title, content, base, script=False):
             '<input id="global-search" name="q" type="search" placeholder="Search" required><button type="submit">Search</button></form></div>'
             f'<nav class="main-nav"><a href="{base}">Subjects</a><a href="{base}recent/">Recent</a><a href="{base}submit/">Submit</a>'
             f'<a href="{base}about/">About</a></nav></header><main id="content">{content}</main>'
-            '<footer><span>Markdownxiv</span><span>Open preprints / Not peer reviewed</span></footer></body></html>')
+            '<footer><span>Markdownxiv</span><span>Open preprints / Not peer reviewed</span>'
+            + footer_extra + '</footer></body></html>')
 
 
 def build(root, output, base_path=None, now=None, social=None):
@@ -150,11 +173,21 @@ def build(root, output, base_path=None, now=None, social=None):
             "invalid_base_path", "Base path must be an absolute, safe Pages path.")
     base = base.rstrip("/") + "/"
     built_at = now or utcnow()
+    repository_url = "https://github.com/" + html.escape(config["repository"], quote=True)
+    update = system_update(root)
+    updated_label = "System updated: unavailable"
+    if update:
+        revision, updated = update
+        date = updated.strftime("%Y-%m-%dT%H:%M:%SZ")
+        updated_label = (f'System updated: <a href="{repository_url}/commit/{revision}">'
+                         f'<time datetime="{date}">{updated:%Y-%m-%d %H:%M:%S} UTC</time></a>')
+    home_footer = (f'<div class="system-footer"><a href="{repository_url}">GitHub</a>'
+                   f'<span>{updated_label}</span></div>')
     entries = []
     def page(path, title, content, script=False):
         target = output / path / "index.html"
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(_page(title, content, base, script), encoding="utf-8")
+        target.write_text(_page(title, content, base, script, home_footer if path == "" else ""), encoding="utf-8")
     from . import PR_PROTOCOLS
     if config.get("protocol") in PR_PROTOCOLS:
         from .catalog import build_catalog
