@@ -7,6 +7,7 @@ from . import PROTOCOL_V4, assets, taxonomy, works
 from .codec import hexhash, read_json, sha, write_json
 from .envelope import ai_label
 from .errors import Rejection, require
+from .github import user_identity
 from .protocol_v3 import homepage
 from .site_papers import discussion
 
@@ -78,6 +79,8 @@ def build_catalog(root, output, base, page, render, config, social=None):
         for name in ("paper.md", "metadata.json", "proof.json"):
             require(not (folder / name).is_symlink(), "unsafe_archive", "Archive files cannot be symlinks.")
         record = read_json(folder / "metadata.json")
+        submitter = user_identity(record["submitter_id"], record.get("submitter", {}).get("login"))
+        record["submitter"] = submitter
         proof = read_json(folder / "proof.json")
         body = (folder / "paper.md").read_bytes()
         require(record["paper_id"] == pid and sha(body) == record["paper_sha256"], "archive_conflict", "Archived manuscript hash mismatch.")
@@ -117,12 +120,16 @@ def build_catalog(root, output, base, page, render, config, social=None):
         for route in ["md/" + version_id] + (["md/" + wid] if latest else []):
             page(route, meta["title"], reader)
         subjects = ', '.join('<a href="' + base + 'categories/' + esc(c) + '/">' + esc(c) + '</a>' for c in [meta.get("primary_category"), *meta.get("secondary_categories", [])] if c)
+        submitted_by = esc('@' + submitter["login"] if submitter["login"] else 'GitHub user ' + submitter["github_id"])
+        if submitter["profile_url"]:
+            submitted_by = '<a href="' + esc(submitter["profile_url"], quote=True) + '">' + submitted_by + '</a>'
         history = '<ol class="versions">' + ''.join('<li><a href="' + base + 'abs/' + wid + 'v' + v["version"] + '/">v' + v["version"] + '</a> <time>' + esc(v["received_at"][:10]) + '</time><span>' + esc(v["change_summary"]) + '</span></li>' for v in reversed(work["versions"])) + '</ol>'
         content = ('<div class="breadcrumb"><a href="' + base + '">Subjects</a> / ' + subjects + '</div>'
                    + '<div class="abstract-heading"><p class="identifier">' + esc(work["work_id"] + 'v' + number) + '</p><h1>' + esc(meta["title"]) + '</h1>'
                    + '<p class="authors">' + author_html(meta["authors"], links) + '</p></div>'
                    + '<div class="abstract-layout"><section class="abstract-content"><h2>Abstract</h2><p class="abstract-text">' + esc(meta["abstract"]) + '</p>'
                    + '<dl class="metadata"><dt>Subjects</dt><dd>' + subjects + '</dd><dt>Submitted</dt><dd>' + esc(work["created_at"][:10]) + '</dd>'
+                   + '<dt>Submitted by</dt><dd>' + submitted_by + '</dd>'
                    + '<dt>This version</dt><dd>' + esc(version["received_at"][:10]) + '</dd><dt>License</dt><dd>' + esc(meta["license"]) + '</dd>'
                    + '<dt>Language</dt><dd>' + esc(meta.get("language", "Unknown")) + '</dd><dt>Declared AI</dt><dd>' + esc(ai_label(meta)) + '</dd></dl>'
                    + '<h2>Submission History</h2>' + history + '</section><aside class="paper-access"><h2>Access</h2><ul>'
@@ -147,6 +154,7 @@ def build_catalog(root, output, base, page, render, config, social=None):
         meta = records[pid]["metadata"]
         catalog_entries.append({"paper_id": pid, "content_hash": pid, "work_id": wid, "version": version["version"],
                                 "title": meta["title"], "abstract": meta["abstract"], "authors": meta["authors"],
+                                "submitter": records[pid]["submitter"],
                                 "author_homepages": version.get("author_homepages", []), "received_at": work["created_at"],
                                 "revised_at": version["received_at"], "primary_category": meta.get("primary_category"),
                                 "secondary_categories": meta.get("secondary_categories", []), "tags": meta.get("tags", []),
@@ -162,7 +170,8 @@ def build_catalog(root, output, base, page, render, config, social=None):
     def listing(route, title, items):
         for number in range(1, max(1, math.ceil(len(items) / PAGE_SIZE)) + 1):
             tools = pagination(len(items), number, route, base)
-            content = '<div class="breadcrumb"><a href="' + base + '">Subjects</a></div><h1>' + esc(title) + '</h1>'
+            content = ('<div class="breadcrumb"><a href="' + base + '">Subjects</a></div>' if route != "recent" else '')
+            content += '<h1>' + esc(title) + '</h1>'
             content += tools + (rows(items[(number - 1) * PAGE_SIZE:number * PAGE_SIZE], base) if items else '<p class="empty">No preprints in this subject yet.</p>') + tools
             page(route + ('/page/' + str(number) if number > 1 else ''), title, content)
     listing("recent", "Recent Submissions", catalog_entries)
@@ -178,8 +187,7 @@ def build_catalog(root, output, base, page, render, config, social=None):
             listing("categories/" + code, code + " - " + category["name"], items)
         groups.append('<section class="subject-group" data-subject-group="' + esc(group["code"]) + '"><h2>' + esc(group["name"]) + '</h2><ul>' + ''.join(subjects) + '</ul></section>')
     count_label = str(len(catalog_entries)) + (' preprint' if len(catalog_entries) == 1 else ' preprints')
-    home = ('<div class="catalog-heading"><div><h1>Browse Subjects</h1><p class="muted">' + count_label + ' / ' + str(len(catalog["categories"])) + ' subjects</p></div>'
-            + '<a href="' + base + 'recent/">Recent submissions</a></div>'
+    home = ('<div class="catalog-heading"><div><h1>Browse Subjects</h1><p class="muted">' + count_label + ' / ' + str(len(catalog["categories"])) + ' subjects</p></div></div>'
             + '<label class="sr-only" for="category-search">Filter subjects</label><input class="subject-filter" id="category-search" type="search" placeholder="Find a subject" autocomplete="off">'
             + '<div class="subject-directory">' + ''.join(groups) + '</div><p id="no-subjects" hidden>No matching subjects.</p>')
     page("", "Markdownxiv", home, True)

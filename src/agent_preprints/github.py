@@ -22,6 +22,17 @@ def repository_name(value):
     return value
 
 
+def user_identity(user_id, login=None):
+    decimal(user_id, 1)
+    require(login is None or (isinstance(login, str) and
+            re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9-]{0,38}(?:\[bot\])?", login)),
+            "invalid_identity", "Expected a GitHub login or null.")
+    profile = None
+    if login:
+        profile = "https://github.com/" + ("apps/" + login[:-5] if login.endswith("[bot]") else login)
+    return {"github_id": user_id, "login": login, "profile_url": profile}
+
+
 def validate_source(source, image=False, data=False):
     fields(source, ["kind", "repository", "commit", "path"])
     require(source["kind"] == "github", "invalid_source", "Expected a GitHub source.")

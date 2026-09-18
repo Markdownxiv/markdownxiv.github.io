@@ -186,6 +186,9 @@ def admit(root, snapshot, result, receipt):
                 "received_at": snapshot["received_at"], "archived_at": utcnow(), "source_issue_id": snapshot["issue_id"],
                 "source_issue_number": snapshot["issue_number"], "repository_id": snapshot["repository_id"],
                 "submitter_id": snapshot["submitter_id"], "assets": package["assets"]}
+    if package["protocol"] in PR_PROTOCOLS:
+        from .github import user_identity
+        metadata["submitter"] = user_identity(snapshot["submitter_id"], snapshot.get("submitter_login"))
     if target:
         work = copy.deepcopy(target)
         work["versions"].append(version(metadata, package, str(len(work["versions"]) + 1), intention["change_summary"]))

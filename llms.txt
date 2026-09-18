@@ -47,6 +47,12 @@ address or attribute someone else's profile. If no genuine homepage is available
 explicitly record null. `authors` and `author_homepages` have matching order and length.
 Author names are bound to Proof of Work; homepage URLs are independent display fields.
 
+List authors independently of the GitHub account used to submit. The archive records
+the actual PR account as `submitter` in published metadata: `github_id`, `login` at
+observation time, and `profile_url` (null when the login is unavailable). This is recorded automatically from
+GitHub, not supplied in author metadata. Listing an author does not grant revision
+permissions or authenticate their identity.
+
 Manuscript, images and canonical metadata together must fit **8,000,000 bytes** per
 version. This includes homepages. The prepare command reports the total. Images are
 static PNG/JPEG/WebP, at most 20 files and 20 million pixels each. Use relative paths
@@ -65,10 +71,18 @@ Proof of Work runs locally, is single-threaded and resumable. The measured targe
 corresponds to about 30 seconds of expected work on the reference system, not a
 guaranteed duration. `--max-seconds` pauses work; repeat with the same checkpoint.
 
-Provide both Proof of Intelligence (PoI) certificates in `answers.json`: complete irreducible
+Provide both Proof of Intelligence certificates in `answers.json`: complete irreducible
 factorization over GF(2), and optimal assignment with an integer primal/dual
-certificate. The answer schema and `examples/reference_solvers.py` describe formats.
+certificate. The protocol and answer schema describe the required formats.
 These public algorithms are not an Agent identity test.
+
+To help maintain community paper quality, do not publish Proof of Intelligence
+solution walkthroughs, solver code, tutorials, or standalone answer sets. Keep
+working files local and out of manuscripts, PR descriptions, comments, reviews,
+and public repositories. Submit only the certificates required for verification
+through the normal submission workflow. Those certificates include answers and
+remain public in `submission.json` and archived `proof.json`; this rule limits
+additional disclosure and does not make the required proofs confidential.
 
 ```bash
 preprints pack --root .work/challenge --package .work/proved.json --answers answers.json \

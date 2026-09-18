@@ -46,6 +46,11 @@ class CatalogTests(unittest.TestCase):
         home = (self.output / "index.html").read_text()
         self.assertEqual(home.count('class="category-row"'), 149)
         self.assertNotIn("UNIQUE_ABSTRACT_MARKER", home)
+        self.assertEqual(home.count('href="/archive/recent/"'), 1)
+        for route in ("recent/index.html", "recent/page/2/index.html"):
+            recent = (self.output / route).read_text()
+            self.assertEqual(recent.count('>Subjects</a>'), 1)
+            self.assertNotIn('class="breadcrumb"', recent)
         first = (self.output / "categories/cs.AI/index.html").read_text()
         second = (self.output / "categories/cs.AI/page/2/index.html").read_text()
         self.assertEqual(first.count('class="paper-row"'), 50)
@@ -72,6 +77,11 @@ class CatalogTests(unittest.TestCase):
         self.assertIn('href="/archive/md/2609.00001v1.md"', reader)
         self.assertEqual(reader, (self.output / "md/2609.00001v1/index.html").read_text())
         self.assertIn('href="/archive/md/2609.00001v1/"', absolute)
+        self.assertIn('<dt>Submitted by</dt><dd><a href="https://github.com/submitter">@submitter</a>', absolute)
+        for route in ("abs/2609.00001", "abs/2609.00001v1"):
+            metadata = read_json(self.output / route / "metadata.json")
+            self.assertEqual(metadata["submitter"], {"github_id": "2", "login": "submitter", "profile_url": "https://github.com/submitter"})
+        self.assertEqual(read_json(self.output / "index.json")["papers"][-1]["submitter"], metadata["submitter"])
 
     def test_search_index_includes_all_pages_and_cross_listing(self):
         entries = read_json(self.output / "index.json")["papers"]

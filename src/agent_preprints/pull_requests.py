@@ -35,7 +35,8 @@ def capture(pr, repository, repository_id, now=None):
     raw = canonical({"repository": repository, "head_repository": head["repo"]["full_name"],
                      "head_repository_id": str(head["repo"]["id"]), "head_sha": head["sha"], "base_sha": pr["base"]["sha"]})
     snapshot = {"repository_id": repository_id, "issue_id": str(pr["id"]), "issue_number": str(pr["number"]),
-                "submitter_id": str(pr["user"]["id"]), "received_at": now or utcnow(), "mode": "pull_request",
+                "submitter_id": str(pr["user"]["id"]), "submitter_login": pr["user"].get("login"),
+                "received_at": now or utcnow(), "mode": "pull_request",
                 "request_sha256": sha(raw), "body": raw.decode()}
     from .archive import snapshot_key
     snapshot_key(snapshot)

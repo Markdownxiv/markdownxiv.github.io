@@ -30,7 +30,7 @@ def v3_fixture(root, body=BODY):
 
 
 def pr(number="1", head="b" * 40):
-    return {"id": number, "number": number, "user": {"id": "2"}, "title": "[preprint] test", "state": "open", "draft": False,
+    return {"id": number, "number": number, "user": {"id": "2", "login": "submitter"}, "title": "[preprint] test", "state": "open", "draft": False,
             "created_at": "2000-01-01T00:00:00Z", "base": {"sha": "a" * 40, "ref": "main", "repo": {"id": "1", "full_name": "test/archive"}},
             "head": {"sha": head, "repo": {"id": "3", "full_name": "author/archive", "private": False}}}
 
@@ -135,6 +135,32 @@ class V3Tests(unittest.TestCase):
         self.assertEqual(receipt["receipt_version"], "markdownxiv-receipt-v3")
         self.assertIn("/pull/1", receipt["discussion_url"])
         self.assertEqual(len(list((self.root / "works").glob("*.json"))), 1)
+
+    def test_submitter_is_the_sealed_pr_account_not_a_declared_author(self):
+        result = process(self.root, self.snapshot, False, supplied_body=bundle(self.package))
+        path = self.root / "papers" / result["paper_id"] / "metadata.json"
+        stored = read_json(path)
+        self.assertEqual(stored["submitter"], {"github_id": "2", "login": "submitter", "profile_url": "https://github.com/submitter"})
+        self.assertEqual(stored["metadata"]["authors"], self.package["metadata"]["authors"])
+        renamed = pr()
+        renamed["user"]["login"] = "renamed"
+        process(self.root, capture(renamed, "test/archive", "1", NOW), False, supplied_body=bundle(self.package))
+        self.assertEqual(read_json(path), stored)
+        impersonated = pr("2")
+        impersonated["user"]["id"] = "3"
+        rejected = process(self.root, capture(impersonated, "test/archive", "1", NOW), False, supplied_body=bundle(self.package))
+        self.assertEqual(rejected["status"], "rejected")
+        self.assertEqual(rejected["error_code"], "identity_mismatch")
+
+    def test_submitter_identity_rejects_unsafe_login_and_keeps_unknown_explicit(self):
+        request = pr()
+        request["user"]["login"] = '<script>alert(1)</script>'
+        with self.assertRaises(Rejection):
+            capture(request, "test/archive", "1", NOW)
+        request["user"].pop("login")
+        result = process(self.root, capture(request, "test/archive", "1", NOW), False, supplied_body=bundle(self.package))
+        stored = read_json(self.root / "papers" / result["paper_id"] / "metadata.json")
+        self.assertEqual(stored["submitter"], {"github_id": "2", "login": None, "profile_url": None})
 
     def test_remote_pr_reads_pinned_files_and_metadata(self):
         api = PRFiles(self.package)

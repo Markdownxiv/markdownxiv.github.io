@@ -57,10 +57,13 @@ def capture(issue, repository_id, mode="observed", observed_at=None):
 
 def snapshot_key(snapshot):
     fields(snapshot, ["repository_id", "issue_id", "issue_number", "submitter_id", "received_at", "mode",
-                      "request_sha256", "body"])
+                      "request_sha256", "body"], ["submitter_login"])
     from .codec import hexhash
     for key in ("repository_id", "issue_id", "issue_number", "submitter_id"):
         decimal(snapshot[key], 1)
+    if "submitter_login" in snapshot:
+        from .github import user_identity
+        user_identity(snapshot["submitter_id"], snapshot["submitter_login"])
     timestamp(snapshot["received_at"])
     hexhash(snapshot["request_sha256"])
     require(snapshot["mode"] in ("opened", "observed", "pull_request"), "invalid_snapshot", "Invalid snapshot mode.")

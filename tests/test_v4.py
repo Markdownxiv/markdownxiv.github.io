@@ -82,6 +82,8 @@ class V4Tests(unittest.TestCase):
         local = {**bundle(package, body), "assets": data}
         record = process(self.root, request, False, supplied_body=local)
         self.assertTrue(record["archived"], record)
+        metadata = read_json(self.root / "papers" / record["paper_id"] / "metadata.json")
+        self.assertEqual(metadata["submitter"], {"github_id": "2", "login": "submitter", "profile_url": "https://github.com/submitter"})
         build(self.root, self.root / "_site", "/", NOW)
         self.assertEqual((self.root / "_site/media" / assets.filename(entries[0])).read_bytes(), image)
         with self.assertRaises(Rejection):
