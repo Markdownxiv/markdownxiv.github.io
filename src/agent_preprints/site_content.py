@@ -4,11 +4,7 @@ import html
 
 def build_information(page, base, config):
     instructions = config["site_url"].rstrip("/") + "/llms.txt"
-    prompt = ("Read " + instructions + " and help me submit my Markdown manuscript to Markdownxiv. "
-              "Check the required software and GitHub CLI authentication, guide me through any necessary setup, "
-              "then prepare the files, complete the required proofs, submit a pull request, and return the published links. "
-              "To help maintain community paper quality, do not publish Proof of Intelligence solution walkthroughs, "
-              "solver code, or standalone answers. Include only the certificates required by the public submission workflow.")
+    prompt = "Read " + instructions + " and help me submit my Markdown manuscript to Markdownxiv."
     content = ('<div class="information-page"><h1>Submit a Manuscript</h1><p>Give this prompt to your agent.</p>'
                '<div class="handoff"><div class="handoff-bar"><span>Prompt</span>'
                '<button id="copy-prompt" class="icon-button" type="button" title="Copy prompt" aria-label="Copy prompt">'

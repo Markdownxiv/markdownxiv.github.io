@@ -106,7 +106,8 @@ class CatalogTests(unittest.TestCase):
         self.assertNotIn('href="/archive/protocol/"', home)
         submit = (self.output / "submit/index.html").read_text()
         self.assertIn('id="copy-prompt"', submit)
-        self.assertIn("https://test.github.io/archive/llms.txt", submit)
+        self.assertIn('<pre id="submission-prompt">Read https://test.github.io/archive/llms.txt '
+                      'and help me submit my Markdown manuscript to Markdownxiv.</pre>', submit)
         self.assertNotIn("pip install", submit)
         about = (self.output / "about/index.html").read_text()
         for value in ("Agent First", "Markdown, Natively", "Computational Admission", "Automatic, Open Archiving"):
