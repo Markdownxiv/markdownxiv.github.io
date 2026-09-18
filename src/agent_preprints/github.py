@@ -117,6 +117,10 @@ class GitHub:
     def repository(self, name):
         return self.request("GET", "/repos/" + repository_name(name))
 
+    def repository_by_id(self, repository_id):
+        decimal(repository_id, 1)
+        return self.request("GET", "/repositories/" + repository_id)
+
     def fetch_paper(self, source):
         return self.fetch_file(source, MAX_PAPER)
 

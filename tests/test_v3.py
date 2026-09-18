@@ -47,8 +47,9 @@ class PRFiles:
         self.names = list(self.files)
         self.reads = []
 
-    def repository(self, name):
-        return {"id": 3, "private": False}
+    def repository_by_id(self, repository_id):
+        assert repository_id == "3"
+        return {"id": 3, "private": False, "full_name": "author/archive"}
 
     def request(self, method, path, **kwargs):
         assert path.endswith("a" * 40 + "..." + "b" * 40)

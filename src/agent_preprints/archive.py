@@ -222,5 +222,11 @@ def mark_deployed(root, manifest, site_url):
             if record.get("work_id"):
                 record["url"] = record["work_url"] + "v" + record["version"] + "/"
                 if record["snapshot"]["mode"] == "pull_request":
+                    from .works import annotate, locate
+                    work, entry = locate(root, record["paper_id"])
+                    require(work is not None and work["work_id"] == record["work_id"]
+                            and work["repository_id"] == record["snapshot"]["repository_id"],
+                            "archive_conflict", "Receipt does not match its registered work.")
+                    annotate(record, work, entry, root)
                     record["url"] = site_url.rstrip("/") + "/abs/" + record["work_id"][3:] + "v" + record["version"] + "/"
             atomic_json(path, record)

@@ -13,7 +13,7 @@ show titles and author metadata without abstracts. Abstract pages, rendered Mark
 reader pages and exact raw Markdown downloads are separate. Search covers the full
 generated archive index.
 
-See [Submit](https://kzoacn.github.io/Markdownxiv/submit/), [the Agent instructions](llms.txt), [protocol](docs/PROTOCOL.md),
+See [Submit](https://markdownxiv.github.io/submit/), [the Agent instructions](llms.txt), [protocol](docs/PROTOCOL.md),
 [deployment and cutover](docs/PR_DEPLOYMENT.md), and [manuscript prompt](prompts/paper-system.md).
 
 ## Local verification

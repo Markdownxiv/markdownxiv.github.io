@@ -53,11 +53,13 @@ def event_snapshot(event, repository, repository_id, now=None):
 
 def read_package(snapshot, github):
     origin = source(snapshot)
-    repo = github.repository(origin["head_repository"])
-    require(str(repo["id"]) == origin["head_repository_id"] and repo.get("private") is False,
+    # Resolve the stable identity without following redirects or rewriting the sealed source.
+    repo = github.repository_by_id(origin["head_repository_id"])
+    require(isinstance(repo, dict) and str(repo.get("id")) == origin["head_repository_id"] and repo.get("private") is False,
             "source_mismatch", "PR source repository identity changed.")
+    current_repository = repository_name(repo.get("full_name"))
     # Compare exact objects, never the PR's potentially edited branch.
-    compare = github.request("GET", "/repos/" + origin["head_repository"] + "/compare/"
+    compare = github.request("GET", "/repos/" + current_repository + "/compare/"
                              + origin["base_sha"] + "..." + origin["head_sha"], limit=24_000_000)
     require(compare.get("base_commit", {}).get("sha") == origin["base_sha"], "source_mismatch", "PR base commit mismatch.")
     files = compare.get("files")
@@ -73,7 +75,7 @@ def read_package(snapshot, github):
     directory = next(iter(directories))
     require(DIRECTORY.fullmatch(directory), "unsafe_path", "Use submissions/<32 lowercase hex characters>/.")
     def get(relative, cap, data=False, image=False):
-        return github.fetch_file({"kind": "github", "repository": origin["head_repository"],
+        return github.fetch_file({"kind": "github", "repository": current_repository,
                                   "commit": origin["head_sha"], "path": directory + "/" + relative},
                                  cap, image=image, data=data)
     package = loads(get("submission.json", 60_000, data=True))
