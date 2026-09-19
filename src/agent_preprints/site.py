@@ -263,6 +263,11 @@ def build(root, output, base_path=None, now=None, social=None):
     for source, target in (("PROTOCOL_V5.md", "protocol-v5.md"), ("PROOF_OF_INTELLIGENCE_V5.md", "proof-of-intelligence-v5.md")):
         if (docs_root / "docs" / source).exists():
             shutil.copyfile(docs_root / "docs" / source, output / target)
+    verification = root / "googledc00e93baeaf43f8.html"
+    if verification.exists() or verification.is_symlink():
+        require(verification.is_file() and not verification.is_symlink(),
+                "unsafe_archive", "Site verification must be an ordinary repository file.")
+        shutil.copyfile(verification, output / verification.name)
     (output / ".nojekyll").touch()
     from .deployment_guard import source_digest
     manifest = {"built_at": built_at, "paper_ids": paper_ids, "epochs": manifest_epochs,

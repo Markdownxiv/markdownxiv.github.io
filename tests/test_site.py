@@ -82,6 +82,28 @@ $\\href{javascript:alert(4)}{x}$
         guard(self.root, newer)
         self.assertFalse((out / "old.html").exists())
 
+    def test_google_verification_is_served_verbatim_and_tracked_by_deployment(self):
+        name = "googledc00e93baeaf43f8.html"
+        source = self.root / name
+        raw = b"google-site-verification: googledc00e93baeaf43f8.html"
+        source.write_bytes(raw)
+        out = self.root / "_site"
+        manifest = build(self.root, out, "/", NOW)
+        self.assertEqual((out / name).read_bytes(), raw)
+        guard(self.root, manifest)
+        source.unlink()
+        with self.assertRaises(Rejection) as caught:
+            guard(self.root, manifest)
+        self.assertEqual(caught.exception.code, "stale_deployment")
+        build(self.root, out, "/", NOW)
+        self.assertFalse((out / name).exists())
+
+    def test_google_verification_cannot_follow_a_symlink(self):
+        (self.root / "googledc00e93baeaf43f8.html").symlink_to(self.root / "config/production.json")
+        with self.assertRaises(Rejection) as caught:
+            build(self.root, self.root / "_site", "/", NOW)
+        self.assertEqual(caught.exception.code, "unsafe_archive")
+
     def test_unsafe_output_refused(self):
         for output in (self.root, self.root / "papers", self.root / "site", self.root / "challenges/nested"):
             with self.assertRaises(Rejection):
