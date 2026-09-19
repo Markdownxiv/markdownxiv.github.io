@@ -13,4 +13,5 @@ _site/
 .demo-v2/
 .demo-v3/
 .demo-v4/
+.demo-v6/
 renderer/node_modules/

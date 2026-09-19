@@ -70,27 +70,29 @@ def native_instance(problem):
 def sample(seed, policy):
     require(isinstance(seed, bytes) and len(seed) == 32, "invalid_seed", "Expected a derived 32-byte seed.")
     validate_policy(policy)
-    problems = []
-    for index, params in enumerate(policy):
-        kwargs = {key: int(value) for key, value in params.items() if key != "family"}
-        family = FAMILIES[params["family"]]
-        if family == "picard_fuchs":
-            base, count = 2 * kwargs["bound"] + 1, (2 * kwargs["genus"] + 1) * kwargs["t_degree"]
-        else:
-            n = (kwargs["m"] + 1) * kwargs["k"] + kwargs["m"]
-            base, count = kwargs["p"], kwargs["m"] * n * (n + 1) // 2
-        prefix = b"markdownxiv-witnessbench-sample-v1\0" + seed + index.to_bytes(4, "big")
-        digits, counter = [], 0
-        while len(digits) < count:
-            block = hashlib.sha256(prefix + counter.to_bytes(8, "big")).digest()
-            counter += 1
-            digits.extend(byte % base for byte in block if byte < 256 - 256 % base)
-        coefficient_index = 0
-        for digit in reversed(digits[:count]):
-            coefficient_index = coefficient_index * base + digit
-        instance = witnessbench.sample(family, index=coefficient_index, **kwargs)
-        problems.append({"family": params["family"], "instance": encode(instance)})
-    return problems
+    return [sample_problem(seed, index, params) for index, params in enumerate(policy)]
+
+
+def sample_problem(seed, index, params):
+    """Shared coefficient sampler; callers validate their version's profile first."""
+    kwargs = {key: int(value) for key, value in params.items() if key != "family"}
+    family = FAMILIES[params["family"]]
+    if family == "picard_fuchs":
+        base, count = 2 * kwargs["bound"] + 1, (2 * kwargs["genus"] + 1) * kwargs["t_degree"]
+    else:
+        n = (kwargs["m"] + 1) * kwargs["k"] + kwargs["m"]
+        base, count = kwargs["p"], kwargs["m"] * n * (n + 1) // 2
+    prefix = b"markdownxiv-witnessbench-sample-v1\0" + seed + index.to_bytes(4, "big")
+    digits, counter = [], 0
+    while len(digits) < count:
+        block = hashlib.sha256(prefix + counter.to_bytes(8, "big")).digest()
+        counter += 1
+        digits.extend(byte % base for byte in block if byte < 256 - 256 % base)
+    coefficient_index = 0
+    for digit in reversed(digits[:count]):
+        coefficient_index = coefficient_index * base + digit
+    instance = witnessbench.sample(family, index=coefficient_index, **kwargs)
+    return {"family": params["family"], "instance": encode(instance)}
 
 
 def markdown(problems):
@@ -181,6 +183,11 @@ def verify_all(problems, answers, seconds=WALL_SECONDS):
             "invalid_problem", "Both versioned WitnessBench problems are required in order.")
     require(isinstance(answers, list) and len(answers) == 2, "answer_count", "Both WitnessBench certificates are required.")
     require(len(canonical(answers)) <= 2 * MAX_CERTIFICATE + 3, "certificate_limit", "Certificate collection is too large.")
+    return verify_isolated(problems, answers, seconds)
+
+
+def verify_isolated(problems, answers, seconds=WALL_SECONDS):
+    """Run exact checks after the version adapter has validated family/count limits."""
     context = multiprocessing.get_context("spawn")
     parent, child = context.Pipe(duplex=False)
     process = context.Process(target=_verify_worker, args=(child, problems, answers))

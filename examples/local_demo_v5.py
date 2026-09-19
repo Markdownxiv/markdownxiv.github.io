@@ -12,13 +12,15 @@ from agent_preprints.pull_requests import capture
 from agent_preprints.site import build
 
 
-def main():
+def main(protocol="v5"):
+    require(protocol in ("v5", "v6"), "protocol_version", "Use a supported fixed WitnessBench demo.")
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out", default=".demo-v5")
+    parser.add_argument("--out", default=".demo-" + protocol)
     args = parser.parse_args()
     root = Path(args.out).resolve()
     require(not root.exists() or not any(root.iterdir()), "invalid_output", "Use an empty demo directory.")
-    source = Path(__file__).resolve().parents[1] / "tests/fixtures/witnessbench-development"
+    fixture = "witnessbench-isotropic-development" if protocol == "v6" else "witnessbench-development"
+    source = Path(__file__).resolve().parents[1] / "tests/fixtures" / fixture
     shutil.copytree(source, root, dirs_exist_ok=True)
     package = read_package(root / "submission.json")
     moment = read_json(root / "experiment.json")["received_at"]
@@ -34,7 +36,8 @@ def main():
     require(receipt["archived"], receipt["error_code"], receipt["message"])
     build(root, root / "_site", "/", moment)
     print(canonical(public_receipt(receipt)).decode())
-    print("Both WitnessBench certificates verified and archived locally. No solver, network, or production publication.")
+    print(("The common isotropic certificate" if protocol == "v6" else "Both WitnessBench certificates")
+          + " verified and archived locally. No solver, network, or production publication.")
 
 
 if __name__ == "__main__":

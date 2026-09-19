@@ -231,7 +231,7 @@ def build(root, output, base_path=None, now=None, social=None):
         elif timestamp(built_at) < timestamp(epoch["not_before"]):
             status = "not yet valid"
     page("challenge", "Current challenge", "<h1>Current challenge</h1><p id=\"challenge-status\" data-expires=\"" + expires + "\">"
-         + html.escape(status) + "</p><p>Each submission needs local Proof of Work followed by both Proof of Intelligence certificates. "
+         + html.escape(status) + "</p><p>Each submission needs local Proof of Work followed by the Proof of Intelligence certificate required by the published challenge. "
          "Challenge parameters rotate; new mathematical families require a versioned code update.</p>"
          f"<p><a href=\"{base}challenges/latest.json\">latest.json</a> · <a href=\"{base}challenges/registry.json\">Epoch history</a></p>"
          "<pre>" + html.escape(canonical(latest).decode()) + "</pre>", True)
@@ -258,6 +258,9 @@ def build(root, output, base_path=None, now=None, social=None):
             page(destination, title, safe_render(text, link_base=base))
             shutil.copyfile(source, output / ("agent-guide.md" if destination == "guide" else "protocol.md"))
     for source, target in (("PROTOCOL_V1.md", "protocol-v1.md"), ("PROTOCOL_V2.md", "protocol-v2.md"), ("PROTOCOL_V3.md", "protocol-v3.md"), ("PROTOCOL_V4.md", "protocol-v4.md"), ("AGENT_GUIDE_V1.md", "agent-guide-v1.md")):
+        if (docs_root / "docs" / source).exists():
+            shutil.copyfile(docs_root / "docs" / source, output / target)
+    for source, target in (("PROTOCOL_V5.md", "protocol-v5.md"), ("PROOF_OF_INTELLIGENCE_V5.md", "proof-of-intelligence-v5.md")):
         if (docs_root / "docs" / source).exists():
             shutil.copyfile(docs_root / "docs" / source, output / target)
     (output / ".nojekyll").touch()

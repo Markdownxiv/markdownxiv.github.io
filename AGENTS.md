@@ -28,3 +28,8 @@ verifier without a new family version. Verify certificates in a bounded process.
 Keep solvers, walkthroughs and standalone answer sets out of public changes.
 Fixed development submission certificates are regression data, never production
 challenge entries. Run the v5 offline demo after admission or persistence changes.
+
+V6 new submissions require only common-isotropic-v1 with p=3, m=8, k=3.
+Keep the v5 two-certificate contract and all archived proofs unchanged. Preserve
+the measured 30-second PoW, 8,000,000-byte material budget and bounded verification.
+Run both v5 and v6 offline demos after admission or persistence changes.

@@ -3,7 +3,7 @@ import re
 from contextlib import nullcontext
 from pathlib import Path
 
-from . import PR_PROTOCOLS, PROTOCOL_V5
+from . import PR_PROTOCOLS, PROTOCOL_V5, PROTOCOL_V6
 from .codec import canonical, decimal, fields, loads, read_json, sha, utcnow
 from .errors import require
 from .github import repository_name, wall_timeout
@@ -101,8 +101,10 @@ def evaluate(snapshot, root, production=True, github=None, bundle=None):
             fields(bundle, ["package", "paper", "metadata", "assets"])
             package = bundle["package"]
         require(package["protocol"] in PR_PROTOCOLS, "protocol_version", "New submissions require a versioned PR package.")
-        if production and read_json(Path(root) / "config/production.json").get("protocol") == PROTOCOL_V5:
-            require(package["protocol"] == PROTOCOL_V5, "protocol_version", "New PR submissions must use the current v5 WitnessBench challenge.")
+        if production:
+            current = read_json(Path(root) / "config/production.json").get("protocol")
+            if current in (PROTOCOL_V5, PROTOCOL_V6):
+                require(package["protocol"] == current, "protocol_version", "New PR submissions must use the current published WitnessBench protocol.")
         verify_pow(package, root, context, production)
         if github is not None:
             meta = get("metadata.json", 60_000, data=True)

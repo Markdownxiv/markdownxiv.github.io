@@ -7,7 +7,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-from . import poa, poi, pow, PROTOCOL_V2, PROTOCOL_V3, PROTOCOL_V4, PROTOCOL_V5, PR_PROTOCOLS
+from . import poa, poi, poi_v6, pow, PROTOCOL_V2, PROTOCOL_V3, PROTOCOL_V4, PROTOCOL_V5, PROTOCOL_V6, PR_PROTOCOLS
 from .archive import capture, process, public_receipt
 from .codec import MAX_PAPER, canonical, loads, read_json, sha, utcnow, write_json
 from .epochs import epoch_path, initialize, load_epoch, rotate, validate_epoch
@@ -30,7 +30,7 @@ def _local_assets(args, package):
     directory = getattr(args, "assets_dir", None)
     if directory is None and getattr(args, "paper", None):
         directory = Path(args.paper).parent
-    cap = pr_protocol(package["protocol"]).MAX_MATERIAL if package["protocol"] in (PROTOCOL_V4, PROTOCOL_V5) else MAX_IMAGE
+    cap = pr_protocol(package["protocol"]).MAX_MATERIAL if package["protocol"] in (PROTOCOL_V4, PROTOCOL_V5, PROTOCOL_V6) else MAX_IMAGE
     return ({e["path"]: read_local(directory, e["path"], cap) for e in package.get("assets", [])}
             if directory is not None else None)
 
@@ -112,12 +112,12 @@ def parser():
     cmd.add_argument("--repository", required=True)
     cmd.add_argument("--repository-id", required=True)
     cmd.add_argument("--site-url", required=True)
-    cmd.add_argument("--protocol", choices=("v1", "v2", "v3", "v4", "v5"), default="v5")
+    cmd.add_argument("--protocol", choices=("v1", "v2", "v3", "v4", "v5", "v6"), default="v6")
     cmd = sub.add_parser("rotate")
     cmd.add_argument("--root", default=".")
     cmd.add_argument("--dev", action="store_true")
     cmd.add_argument("--repository-id", default="1")
-    cmd.add_argument("--protocol", choices=("v1", "v2", "v3", "v4", "v5"), help="Choose a development protocol; current submissions use v5")
+    cmd.add_argument("--protocol", choices=("v1", "v2", "v3", "v4", "v5", "v6"), help="Choose a development protocol; current submissions use v6")
     cmd = sub.add_parser("challenge")
     cmd.add_argument("--root", default=".")
     cmd.add_argument("--site")
@@ -261,7 +261,7 @@ def execute(args):
         kwargs = {}
         if epoch["protocol"] in (PROTOCOL_V2, *PR_PROTOCOLS):
             from . import assets, taxonomy
-            limits = {"max_image": 8_000_000, "max_total": 8_000_000} if epoch["protocol"] in (PROTOCOL_V4, PROTOCOL_V5) else {}
+            limits = {"max_image": 8_000_000, "max_total": 8_000_000} if epoch["protocol"] in (PROTOCOL_V4, PROTOCOL_V5, PROTOCOL_V6) else {}
             entries, _ = assets.collect_local(body, args.assets_dir or Path(args.paper).parent, **limits)
             kwargs = {"entries": entries, "asset_source": read_json(args.asset_source) if args.asset_source else None,
                       "catalog": taxonomy.load(args.root, epoch["taxonomy_hash"])}
@@ -310,19 +310,19 @@ def execute(args):
         elif command in ("questions", "verify-pow"):
             epoch, digest = verify_pow(package, args.root, context, not args.dev)
             if command == "questions":
-                engine = poi if package["protocol"] == PROTOCOL_V5 else poa
+                engine = {PROTOCOL_V5: poi, PROTOCOL_V6: poi_v6}.get(package["protocol"], poa)
                 seed = pow.seed(digest, package["protocol"])
                 value = {"poa_seed": seed.hex(), "problems": engine.sample(seed, epoch["poa_policy"])}
                 write_json(args.out, value)
                 if args.markdown:
-                    require(package["protocol"] == PROTOCOL_V5, "protocol_version", "English WitnessBench statements require v5.")
-                    Path(args.markdown).write_text(poi.markdown(value["problems"]), encoding="utf-8")
+                    require(package["protocol"] in (PROTOCOL_V5, PROTOCOL_V6), "protocol_version", "English WitnessBench statements require v5 or v6.")
+                    Path(args.markdown).write_text(engine.markdown(value["problems"]), encoding="utf-8")
             else:
                 value = {"valid": True, "pow_hash": digest.hex()}
             _emit(value)
         else:
             if command == "pack":
-                if package["protocol"] == PROTOCOL_V5:
+                if package["protocol"] in (PROTOCOL_V5, PROTOCOL_V6):
                     with Path(args.answers).open("rb") as stream:
                         package["answers"] = loads(stream.read(1_000_001), 1_000_000, stringify_integers=True)
                 else:

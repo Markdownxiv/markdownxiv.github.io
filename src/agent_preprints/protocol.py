@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import PROTOCOL, VERIFIER, PROTOCOL_V2, PROTOCOL_V3, PROTOCOL_V4, PROTOCOL_V5, PR_PROTOCOLS
+from . import PROTOCOL, VERIFIER, PROTOCOL_V2, PROTOCOL_V3, PROTOCOL_V4, PROTOCOL_V5, PROTOCOL_V6, PR_PROTOCOLS
 from .codec import (MAX_PACKAGE, canonical, content_hash, decimal, fields, hexhash,
                     loads, metadata, paper_bytes, sha, timestamp)
 from .epochs import load_epoch
@@ -13,9 +13,9 @@ PACKAGE_FIELDS = ["protocol", "repository_id", "submitter_id", "epoch_id", "epoc
 
 
 def pr_protocol(version):
-    from . import protocol_v3, protocol_v4, protocol_v5
+    from . import protocol_v3, protocol_v4, protocol_v5, protocol_v6
     require(version in PR_PROTOCOLS, "protocol_version", "Unsupported PR submission protocol.")
-    return {PROTOCOL_V3: protocol_v3, PROTOCOL_V4: protocol_v4, PROTOCOL_V5: protocol_v5}[version]
+    return {PROTOCOL_V3: protocol_v3, PROTOCOL_V4: protocol_v4, PROTOCOL_V5: protocol_v5, PROTOCOL_V6: protocol_v6}[version]
 
 
 def load_package(data):
