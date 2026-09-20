@@ -115,7 +115,19 @@ the canonical author metadata uploaded in the submission directory.
 The homepage lists the trusted subject taxonomy. Category and recent listings sort
 works by original trusted receipt time descending, then ID descending. A work appears
 once using its current version; primary and secondary categories count it once each.
-Static pages contain 50 works, without abstracts. Search uses the complete generated
+Static pages contain 50 works, without abstracts. Each listing includes a link to
+the first PR with comment, like and dislike counts, formatted as `N comments / +a / -b`.
+Newest is the default order. Top sorts the full selected collection by cumulative
+likes minus dislikes, then original receipt time and ID descending, before pagination.
+Its submission windows are the last 7, 30 or 365 days, or all time, measured against
+the build time. These windows filter original submission dates, not reaction dates
+or revision dates. Missing discussion snapshots are shown as unknown and rank after
+known scores, including negative scores. Counts remain periodic GitHub snapshots.
+The static routes append `/top/week/`, `/top/month/`, `/top/year/` or `/top/all/` to
+Recent or a category path, and retain that order and window across pagination.
+The generated index includes `discussion_url` and nullable `social` counts with
+their net `score` and synchronization time; it contains no comment bodies.
+Search uses the complete generated
 index, including abstracts for matching, and shows the same metadata-only results.
 
 `abs/YYMM.NNNNN/` is the latest abstract page; `abs/YYMM.NNNNNvN/` is a version.

@@ -1,5 +1,6 @@
 """Work/version/category pages; all user strings are escaped or safely rendered."""
 import html
+import re
 import shutil
 from pathlib import Path
 
@@ -9,6 +10,25 @@ from .envelope import ai_label
 from .errors import require
 
 esc = html.escape
+
+
+def reaction_counts(snapshot):
+    """Expose bounded counts only when a complete discussion snapshot is available."""
+    if not snapshot or snapshot.get("status") != "synced":
+        return None
+    names = ("comment_count", "likes", "dislikes")
+    if not all(isinstance(snapshot.get(key), str) and re.fullmatch(r"[0-9]{1,20}", snapshot[key]) for key in names):
+        return None
+    counts = {key: str(int(snapshot[key])) for key in names}
+    return {**counts, "score": str(int(counts["likes"]) - int(counts["dislikes"])),
+            "last_synced_at": snapshot.get("last_synced_at")}
+
+
+def reaction_summary(counts):
+    if counts is None:
+        return "— comments / +— / -—"
+    noun = "comment" if counts["comment_count"] == "1" else "comments"
+    return counts["comment_count"] + " " + noun + " / +" + counts["likes"] + " / -" + counts["dislikes"]
 
 
 def categories(meta, base):
@@ -35,11 +55,14 @@ def discussion(work, snapshot, repository):
         content += '<p class="note">No discussion snapshot in this build. Open GitHub for current reactions and comments.</p>'
     if work.get("discussion_kind") == "pull_request":
         content = '<section class="discussion"><h2>Discussion</h2><p><a href="' + url + '">PR #' + esc(work["root_issue_number"]) + '</a></p>'
+        counts = reaction_counts(snapshot)
+        content += '<p>' + reaction_summary(counts) + '</p>'
         if snapshot and snapshot.get("status") == "synced":
-            content += '<p>' + esc(snapshot["comment_count"]) + ' comments / +1 ' + esc(snapshot["likes"]) + ' / -1 ' + esc(snapshot["dislikes"]) + '</p>'
             content += '<p class="note">Updated ' + esc(snapshot["last_synced_at"]) + '</p>'
             for comment in snapshot["comments"]:
                 content += '<div class="comment"><p><a href="' + url + '#issuecomment-' + esc(comment["id"]) + '">' + esc(comment["author"]) + '</a> / ' + esc(comment["updated_at"]) + '</p><div class="comment-text">' + esc(comment["body"]) + '</div></div>'
+        else:
+            content += '<p class="note">Counts unavailable. Open GitHub for current reactions and comments.</p>'
     return content + '</section>'
 
 

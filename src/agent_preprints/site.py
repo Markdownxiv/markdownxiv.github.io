@@ -200,7 +200,7 @@ def build(root, output, base_path=None, now=None, social=None):
         from .catalog import build_catalog
         from .reader import install_assets, render_reader
         install_assets(output)
-        paper_ids = build_catalog(root, output, base, page, render_reader, config, social)
+        paper_ids = build_catalog(root, output, base, page, render_reader, config, social, now=built_at)
     else:
         from .site_papers import build_papers
         paper_ids = build_papers(root, output, base, page, safe_render, config, social)

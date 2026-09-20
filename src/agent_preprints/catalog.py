@@ -2,18 +2,46 @@
 import html
 import math
 import shutil
+from datetime import timedelta
 
 from . import PROTOCOL_V4, PROTOCOL_V5, PROTOCOL_V6, assets, taxonomy, works
-from .codec import hexhash, read_json, sha, write_json
+from .codec import hexhash, read_json, sha, timestamp, utcnow, write_json
 from .envelope import ai_label
 from .errors import Rejection, require
 from .github import user_identity
 from .protocol_v3 import homepage
 from .reader import contents, math_stylesheet
-from .site_papers import discussion
+from .site_papers import discussion, reaction_counts, reaction_summary
 
 PAGE_SIZE = 50
+PERIODS = {"week": ("Past week", 7), "month": ("Past month", 30), "year": ("Past year", 365), "all": ("All time", None)}
 esc = html.escape
+
+
+def ranked_entries(entries, period, now):
+    """Rank the entire submission window before applying static pagination."""
+    days = PERIODS[period][1]
+    if days is not None:
+        end = timestamp(now)
+        start = end - timedelta(days=days)
+        entries = [entry for entry in entries if start <= timestamp(entry["received_at"]) <= end]
+    def key(entry):
+        counts = entry.get("social")
+        return (counts is not None, int(counts["score"]) if counts else 0, entry["received_at"], entry["work_id"])
+    return sorted(entries, key=key, reverse=True)
+
+
+def sort_controls(route, base, period=None):
+    def link(label, path, selected):
+        return '<a href="' + base + path + '/"' + (' aria-current="page"' if selected else '') + '>' + label + '</a>'
+    content = '<div class="listing-options"><nav aria-label="Sort papers"><span>Sort by</span>'
+    content += link("Newest", route, period is None)
+    content += link("Top", route + "/top/" + (period or "all"), period is not None) + '</nav>'
+    if period:
+        content += '<nav aria-label="Submission period"><span>Submitted</span>'
+        content += ''.join(link(label, route + "/top/" + key, period == key) for key, (label, _) in PERIODS.items())
+        content += '</nav>'
+    return content + '</div>'
 
 
 def author_html(names, links):
@@ -36,10 +64,13 @@ def rows(entries, base):
         categories = [entry["primary_category"], *entry["secondary_categories"]]
         subjects = ', '.join('<a href="' + base + 'categories/' + esc(code) + '/">' + esc(code) + '</a>' for code in categories if code)
         revised = ' <span class="muted">(revised ' + esc(entry["revised_at"][:10]) + ')</span>' if entry["version"] != "1" else ""
+        counts = entry.get("social")
+        updated = 'Counts updated ' + counts["last_synced_at"] if counts and counts.get("last_synced_at") else 'Counts unavailable; open GitHub for current discussion'
+        social = '<p class="paper-social"><a href="' + esc(entry["discussion_url"], quote=True) + '" title="' + esc(updated, quote=True) + '">' + reaction_summary(counts) + '</a></p>'
         parts.append('<li class="paper-row" data-paper><div class="paper-id"><span>' + esc(wid + 'v' + version) + '</span><span class="paper-formats">' + links + '</span></div>'
                      + '<h2><a href="' + entry["url"] + '">' + esc(entry["title"]) + '</a></h2>'
                      + '<p class="authors">' + author_html(entry["authors"], entry["author_homepages"]) + '</p>'
-                     + '<p class="paper-details"><time datetime="' + esc(entry["received_at"]) + '">' + esc(entry["received_at"][:10]) + '</time>' + revised + ' / ' + subjects + '</p></li>')
+                     + '<p class="paper-details"><time datetime="' + esc(entry["received_at"]) + '">' + esc(entry["received_at"][:10]) + '</time>' + revised + ' / ' + subjects + '</p>' + social + '</li>')
     return '<ol class="papers">' + ''.join(parts) + '</ol>'
 
 
@@ -67,7 +98,8 @@ def pagination(total, current, route, base):
     return content + '</div>'
 
 
-def build_catalog(root, output, base, page, render, config, social=None):
+def build_catalog(root, output, base, page, render, config, social=None, now=None):
+    now = now or utcnow()
     registry = works.all_works(root)
     versions = {v["content_hash"]: (w, v) for w in registry for v in w["versions"]}
     snapshots = {w["work_id"]: w for w in (social or {}).get("works", [])}
@@ -168,7 +200,9 @@ def build_catalog(root, output, base, page, render, config, social=None):
                                 "secondary_categories": meta.get("secondary_categories", []), "tags": meta.get("tags", []),
                                 "declared_ai": ai_label(meta), "url": base + "abs/" + wid[3:] + "/",
                                 "markdown_url": base + "md/" + wid[3:] + ".md",
-                                "reader_url": base + "md/" + wid[3:] + "/"})
+                                "reader_url": base + "md/" + wid[3:] + "/",
+                                "discussion_url": "https://github.com/" + config["repository"] + ("/pull/" if work.get("discussion_kind") == "pull_request" else "/issues/") + work["root_issue_number"],
+                                "social": reaction_counts(snapshots.get(wid))})
         write_json(output / "works" / (wid[3:] + ".json"), work)
     catalog_entries.sort(key=lambda e: (e["received_at"], e["work_id"]), reverse=True)
     write_json(output / "index.json", {"papers": catalog_entries})
@@ -176,12 +210,21 @@ def build_catalog(root, output, base, page, render, config, social=None):
     if social is not None:
         write_json(output / "social.json", social)
     def listing(route, title, items):
-        for number in range(1, max(1, math.ceil(len(items) / PAGE_SIZE)) + 1):
-            tools = pagination(len(items), number, route, base)
-            content = ('<div class="breadcrumb"><a href="' + base + '">Subjects</a></div>' if route != "recent" else '')
-            content += '<h1>' + esc(title) + '</h1>'
-            content += tools + (rows(items[(number - 1) * PAGE_SIZE:number * PAGE_SIZE], base) if items else '<p class="empty">No preprints in this subject yet.</p>') + tools
-            page(route + ('/page/' + str(number) if number > 1 else ''), title, content)
+        for period in (None, *PERIODS):
+            selected = ranked_entries(items, period, now) if period else items
+            view = route + "/top/" + period if period else route
+            for number in range(1, max(1, math.ceil(len(selected) / PAGE_SIZE)) + 1):
+                tools = pagination(len(selected), number, view, base)
+                content = ('<div class="breadcrumb"><a href="' + base + '">Subjects</a></div>' if route != "recent" else '')
+                content += '<h1>' + esc(title) + '</h1>' + sort_controls(route, base, period)
+                if period:
+                    days = PERIODS[period][1]
+                    window = ('First submitted in the past ' + str(days) + ' days.' if days else 'All submission dates.')
+                    missing = ' Papers with unavailable counts appear last.' if any(entry["social"] is None for entry in selected) else ''
+                    content += '<p class="note ranking-note">Ranked by likes minus dislikes; ties show newer submissions first. ' + window + missing + '</p>'
+                empty = 'No preprints submitted in this period.' if period and items else 'No preprints yet.'
+                content += tools + (rows(selected[(number - 1) * PAGE_SIZE:number * PAGE_SIZE], base) if selected else '<p class="empty">' + empty + '</p>') + tools
+                page(view + ('/page/' + str(number) if number > 1 else ''), title, content)
     listing("recent", "Recent Submissions", catalog_entries)
     catalog = taxonomy.load(root, read_json(root / "taxonomy/latest.json")["taxonomy_hash"])
     groups = []
