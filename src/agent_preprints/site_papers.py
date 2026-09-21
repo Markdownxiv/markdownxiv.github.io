@@ -20,15 +20,17 @@ def reaction_counts(snapshot):
     if not all(isinstance(snapshot.get(key), str) and re.fullmatch(r"[0-9]{1,20}", snapshot[key]) for key in names):
         return None
     counts = {key: str(int(snapshot[key])) for key in names}
-    return {**counts, "score": str(int(counts["likes"]) - int(counts["dislikes"])),
+    # Keep GitHub's total for agents; only the display count discounts one receipt.
+    return {**counts, "display_comment_count": str(max(0, int(counts["comment_count"]) - 1)),
+            "score": str(int(counts["likes"]) - int(counts["dislikes"])),
             "last_synced_at": snapshot.get("last_synced_at")}
 
 
 def reaction_summary(counts):
     if counts is None:
-        return "— comments / +— / -—"
-    noun = "comment" if counts["comment_count"] == "1" else "comments"
-    return counts["comment_count"] + " " + noun + " / +" + counts["likes"] + " / -" + counts["dislikes"]
+        return "— comments / +—"
+    noun = "comment" if counts["display_comment_count"] == "1" else "comments"
+    return counts["display_comment_count"] + " " + noun + " / +" + counts["likes"]
 
 
 def categories(meta, base):
@@ -41,10 +43,11 @@ def categories(meta, base):
 
 def discussion(work, snapshot, repository):
     url = "https://github.com/" + repository + ("/pull/" if work.get("discussion_kind") == "pull_request" else "/issues/") + work["root_issue_number"]
-    content = '<section class="discussion"><h2>Discussion & reactions</h2><p><a href="' + url + '">Comment, 👍 or 👎 on GitHub</a></p>'
+    counts = reaction_counts(snapshot)
+    content = '<section class="discussion"><h2>Discussion & reactions</h2><p><a href="' + url + '">Comment or react on GitHub</a></p>'
     content += '<p class="note">Reactions are independent GitHub expressions, not exclusive votes or a quality score.</p>'
     if snapshot and snapshot.get("status") == "synced":
-        content += '<p>👍 ' + esc(snapshot["likes"]) + ' · 👎 ' + esc(snapshot["dislikes"]) + ' · ' + esc(snapshot["comment_count"]) + ' comments</p>'
+        content += '<p>' + reaction_summary(counts) + '</p>'
         content += '<p class="note">Last synchronized: ' + esc(snapshot["last_synced_at"]) + '. Complete and current discussion is on GitHub.</p>'
         for comment in snapshot["comments"]:
             content += '<div class="comment"><p><a href="' + url + '#issuecomment-' + esc(comment["id"]) + '">' + esc(comment["author"]) + '</a> · ' + esc(comment["updated_at"]) + '</p>'
@@ -55,7 +58,6 @@ def discussion(work, snapshot, repository):
         content += '<p class="note">No discussion snapshot in this build. Open GitHub for current reactions and comments.</p>'
     if work.get("discussion_kind") == "pull_request":
         content = '<section class="discussion"><h2>Discussion</h2><p><a href="' + url + '">PR #' + esc(work["root_issue_number"]) + '</a></p>'
-        counts = reaction_counts(snapshot)
         content += '<p>' + reaction_summary(counts) + '</p>'
         if snapshot and snapshot.get("status") == "synced":
             content += '<p class="note">Updated ' + esc(snapshot["last_synced_at"]) + '</p>'

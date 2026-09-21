@@ -108,19 +108,30 @@ class CatalogTests(unittest.TestCase):
 
     def test_discussion_counts_are_shared_by_abstracts_listings_and_index(self):
         absolute = (self.output / "abs/2609.00001/index.html").read_text()
-        self.assertIn("1 comment / +6 / -1", absolute)
+        self.assertIn("0 comments / +6</p>", absolute)
+        self.assertNotIn(" / -1", absolute)
         self.assertNotIn("comments / +1 6", absolute)
         for route in ("recent", "categories/cs.AI", "categories/cs.LG"):
             second = (self.output / route / "page/2/index.html").read_text()
             self.assertIn('href="https://github.com/test/archive/pull/1"', second)
-            self.assertIn("1 comment / +6 / -1", second)
+            self.assertIn("0 comments / +6</a>", second)
+            self.assertNotIn(" / -1", second)
             first = (self.output / route / "index.html").read_text()
-            self.assertIn("— comments / +— / -—", first)
+            self.assertIn("— comments / +—</a>", first)
         entries = read_json(self.output / "index.json")["papers"]
         self.assertIsNone(entries[0]["social"])
         self.assertEqual(entries[-1]["social"]["score"], "5")
+        self.assertEqual(entries[-1]["social"]["dislikes"], "1")
+        self.assertEqual(entries[-1]["social"]["comment_count"], "1")
+        self.assertEqual(entries[-1]["social"]["display_comment_count"], "0")
+        raw = read_json(self.output / "social.json")["works"][0]
+        self.assertEqual(raw["dislikes"], "1")
+        self.assertEqual(raw["comment_count"], "1")
         self.assertNotIn("comments", entries[-1]["social"])
         self.assertEqual(entries[-1]["discussion_url"], "https://github.com/test/archive/pull/1")
+        guide = (self.output / "llms.txt").read_text()
+        self.assertIn("https://markdownxiv.github.io/index.json", guide)
+        self.assertIn("social.dislikes", guide)
 
     def test_score_sorting_precedes_pagination_and_retains_category_and_window(self):
         for route in ("recent", "categories/cs.AI", "categories/cs.LG"):
@@ -160,7 +171,11 @@ class CatalogTests(unittest.TestCase):
         self.assertIsNone(reaction_counts(None))
         self.assertIsNone(reaction_counts({"status": "unavailable", "likes": "9"}))
         counts = {"status": "synced", "likes": "0", "dislikes": "0", "comment_count": "0"}
-        self.assertEqual(reaction_summary(reaction_counts(counts)), "0 comments / +0 / -0")
+        for raw_count, label in (("0", "0 comments"), ("1", "0 comments"), ("2", "1 comment"), ("3", "2 comments")):
+            with self.subTest(raw_count=raw_count):
+                adjusted = reaction_counts({**counts, "comment_count": raw_count})
+                self.assertEqual(reaction_summary(adjusted), label + " / +0")
+                self.assertEqual(adjusted["comment_count"], raw_count)
         self.assertIsNone(reaction_counts({**counts, "likes": '<script>alert(1)</script>'}))
 
     def test_subject_order_human_pages_and_plain_agent_instructions(self):

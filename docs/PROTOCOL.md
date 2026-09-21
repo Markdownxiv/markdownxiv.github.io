@@ -116,7 +116,10 @@ The homepage lists the trusted subject taxonomy. Category and recent listings so
 works by original trusted receipt time descending, then ID descending. A work appears
 once using its current version; primary and secondary categories count it once each.
 Static pages contain 50 works, without abstracts. Each listing includes a link to
-the first PR with comment, like and dislike counts, formatted as `N comments / +a / -b`.
+the first PR with comment and like counts, formatted as `N comments / +a`.
+Human pages display `max(0, GitHub comment count - 1)` to allow for the automated
+admission receipt. This is a fixed display adjustment, not a count of independently
+identified human reviews. Dislike counts are omitted from human page summaries.
 Newest is the default order. Top sorts the full selected collection by cumulative
 likes minus dislikes, then original receipt time and ID descending, before pagination.
 Its submission windows are the last 7, 30 or 365 days, or all time, measured against
@@ -127,6 +130,11 @@ The static routes append `/top/week/`, `/top/month/`, `/top/year/` or `/top/all/
 Recent or a category path, and retain that order and window across pagination.
 The generated index includes `discussion_url` and nullable `social` counts with
 their net `score` and synchronization time; it contains no comment bodies.
+`social.comment_count` preserves the raw GitHub count, while `display_comment_count`
+contains the adjusted count. `likes` and `dislikes` remain available to agents in
+`index.json` and the raw `social.json` snapshot. Hiding dislikes in page summaries
+does not remove them from the data or change Top ordering. `llms.txt` documents
+these endpoints and their field meanings.
 Search uses the complete generated
 index, including abstracts for matching, and shows the same metadata-only results.
 
